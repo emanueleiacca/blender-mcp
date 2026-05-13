@@ -15,87 +15,104 @@ unitario aumentando qualità percepita con DIY + sourcing intelligente (IT/EU/Ci
 
 ---
 
-## 🎯 Raccomandazione operativa (sintesi round 1+2)
+## 🎯 La "pipeline coerente" che emerge dai 3 round
 
-### Workflow base "Porcellana economy" — **€0.42-0.55/pezzo materiali, 50 min**
-Da `05_round2/E_diy_budget/07_workflow_recommended.md`. Copre **85-90% della
-percezione qualità del cliente non-modellista** rispetto al workflow premium €7/pezzo.
+Round 1 ha mappato la bibliografia, Round 2 ha cucito il workflow budget, Round 3
+ha aggiunto **artigianalità storica + lab DIY + storytelling**. Convergenza
+operativa per il **caso edizione limitata premium**:
 
 ```
-Sgrasso IPA → PVA+talco filler DIY → sand 320/600 →
-Primer MaxMeyer/Maximum BricoIO → sand 800 wet → acrilico Maxi Color →
-(opz wash tè + drybrush Giotto) → Pledge clear coat → (opz polish dentifricio)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PRODOTTO     →  TECNICA          →  TOOL DIY        →  NARRATIVA  →  PREZZO │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Statuetta    →  Marmorino vene-  →  Spray booth     →  "Tradizione →  €80   │
+│  18cm PLA     →  ziano (R3-B 02)  →  cartone €8      →  veneziana   →  -120  │
+│  basic        →  shellac french   →  + drying rack   →  XVI sec."   →  decoy │
+│  €1.50 print  →  polish (R3-B 06) →  filo €5         →  (R3-D 01)   →  R3-D  │
+│  Bambu A1     →                   →  light box €3    →                       │
+│  (batch 25)   →  Costo ricetta:   →  jig heat-set    →  Edizione    →  Lotto │
+│               →  €0.30/pezzo      →  PETG €0.15      →  limitata 25 →  =     │
+│               →  (R3-B + R2-E)    →  (R3-C totale    →  numerata    →  Batch │
+│               →                   →  €25-50)         →  (scarcity   →  prod  │
+│               →                   →                  →   reale!)    →  R2-D  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Setup tool una tantum — **€92 totali** (€198 se solo IT, €100 via Cina)
-Da `05_round2/E_diy_budget/04_setup_tools_under_100eur.md` e
-`05_round2/F_china_bulk/10_master_china_shopping_list.md`:
-- Airbrush 0.3mm + compressore tank 3L Aliexpress: €60-80
-- Light tent PULUZ 60cm + LED ring + tripod: €40-50
-- Maschera 3M 6200 clone + filtri A1: €15
-- Carta vetrata + pennelli + spatole + IPA + guanti: €25 Brico
-
-### Quando salire di tier (two-tier strategy R2-A)
-- **Default**: Pledge / Glassex (€0.03/pezzo) o Mr. Super Clear UV Cut (€0.50/pezzo)
-- **Solo pezzi >€40 commerciali con touchpoint**: SprayMax 2K (€22-28/bombola, PPE serio)
-  Sotto soglia il ROI del 2K non ripaga PPE/complessità/sensibilizzazione cronica.
-
-### Shortcut radicali per geometrie specifiche (R2-B)
-| Geometria | Shortcut | €/pezzo | Tempo | Resa |
-|-----------|----------|---------|-------|------|
-| Vasi/lampshade decor | PLA Silk vase mode + Pledge | €1.60 | 30 min | 7/10 |
-| Ciotole biscuit | PLA Matte nudo (no post) | €3.75 | 0 min | 7/10 |
-| Ciotole biscuit autentico | Kaolin slurry DIY (PVA+kaolin) | €0.30 | 60 min | 10/10 |
-| Stone/granito | ProtoPasta Sandstone nudo* | €10 | 0 min | 8/10 |
-
-*Premium filament — valutare solo se volume giustifica €30+/kg.
-
-### Heat-set inserts protocol (R2-D) — 3 step
-1. **CAD**: foro = OD_inserto (M3 Ruthex → 4.0mm), depth × 1.2, chamfer 45°×0.5mm, parete ≥ 2.5× thread.
-2. **Heat**: 210°C (mai >230°C), 1-2s preheat, 3-5s pressione perpendicolare, no rotazione.
-3. **Jig**: cilindro guida PETG perpendicolare → drop fail rate 3-5×.
-Inserts Cina M3 500 pcs €20 vs Ruthex €60-90 (R2-F).
-
-### Fase con ROI marginale più alto: **foto prodotto + listing** (R2-D)
-- Da 45min/pezzo → 8min/pezzo con setup permanente
-- Light tent + tripod + ColorChecker + Lightroom preset + template Etsy
-- Investimento 4h + €150 → ripaga in **10 pezzi**
-- Conversion +35-60% Etsy (più impattante di 2h di sanding extra)
-
-### 3 trick "near-free" R2-E
-1. **Wash tè nero + goccia detergente piatti** (€0.001/pezzo) = Citadel Agrax Earthshade (€8/24ml)
-2. **Pledge/Glassex clear coat a pennello** (€0.03/pezzo) = Mr.Hobby Premium Gloss (€0.50/pezzo) @ 85% resa
-3. **Polish dentifricio + carta 2000 wet** (€0.01/pezzo) = Tamiya Polishing Compound
-
-### 3 trick batch-processing R2-D (saving >30%)
-1. **Cura parallela su rack verticale**: tutti i pezzi curano insieme, tempi morti O(N)→O(1)
-2. **Stazioni LEAN 5S**: zona sanding, spray, assembly, foto — niente context switch
-3. **Template + preset + jig**: setup una tantum 6-10h, ripaga in 20 pezzi, taglia 60-80% task ripetitivi
+**Insight chiave**: il batch di produzione R2-D (cura parallela 25 pezzi su
+drying rack DIY) **coincide** con l'edizione limitata numerata R3-D → la
+scarcity non è marketing fake, è il vincolo fisico di produzione.
 
 ---
 
-## 🛒 Sourcing — strategia di crescita ordini Cina (R2-F)
+## 🎯 Raccomandazione operativa per livello
 
-| Fase | Ordine | Piattaforma | Budget | Obiettivo |
-|------|--------|-------------|--------|-----------|
-| M1 | Test | Aliexpress IOSS | €100-150 | familiarizzare, validare qualità su prodotti chiave |
-| M2 | Espansione | Aliexpress | €350 | airbrush+compressore+filamento |
-| M5-6 | Custom | Alibaba Trade Assurance | €1600 | packaging custom 500+, sticker, mailer kraft |
-| M8+ | Agente | Yansourcing/EasyChina (fee 5-8%) | spesa annua >€3000 | scaling |
+### Tier 1 — "Decor anonimo" (€20-40 retail)
+**Workflow base "Porcellana economy" R2-E** — €0.42-0.55/pezzo materiali, 50 min:
+```
+IPA → PVA+talco DIY filler → sand 320/600 → primer MaxMeyer/BricoIO →
+sand 800 wet → acrilico Maxi Color → wash tè (opz) → Pledge clear coat
+```
+- Setup: €25-50 DIY (R3-C) o €92 acquisto (R2-E) o €100 Cina (R2-F)
+- Foto: light box cartone €3 + smartphone (R3-C/R3-D)
 
-**Top 5 ROI Cina (>50% saving, low risk dogana)**:
-1. Heat-set M3 500 pcs (€20 vs €60-90, -65%)
-2. Pigmenti mica/pearl 24 colori (€8 vs €50-80, -80%)
-3. Compressore AS186 + Fengda BD-130 (€90 vs €280-400, -65%)
-4. Sunlu PLA+ 10kg bundle (€100 vs €180-220, -45%)
-5. Light tent PULUZ + accessori foto (€100 vs €280-350, -65%)
+### Tier 2 — "Heritage line artigianale" (€60-130 retail)
+**Workflow R3-B su base R2-E** — sostituire step finale con ricetta storica:
+- **Marmo/pietra**: marmorino veneziano DIY (R3-B 02) — stucco Saratoga + carbonato + pigmenti, lucidato a freddo. Profondità ottica indistinguibile da Calacatta a 30cm.
+- **Porcellana profondità**: shellac french polish (R3-B 06) — gommalacca scaglie + alcool denaturato. Mirror finish "pianoforte".
+- **Ceramica autentica tatto**: kaolin slurry DIY (R2-B 06) — PVA + kaolin farmacia.
+- **Biscuit/terracotta**: casein milk paint (R3-B 05) — ricotta + calce + pigmento, €0.51/pezzo.
 
-**NON comprare Cina** (qualità o problemi normativi):
-- Cloni Vallejo/Citadel/Tamiya/Mr.Hobby/XTC-3D (qualità inferiore)
-- Bombolette spray commerciali (IATA mare obbligatorio, CLP/SDS farlocchi)
-- PPE filtri respiratore "certificate" (certificazione EU sospetta)
+Costo incrementale rispetto Tier 1: €0.30-0.80/pezzo + 30-60 min lavoro.
+Narrative storica (R3-D 01) giustifica uplift +25-50% retail.
 
-**Fallback Italia** se non hai tempo Cina (R2-C): starter kit €198 (Saratoga + Tamiya + Mr.Hobby UV Cut + carta + 3M + Vallejo).
+### Tier 3 — "Premium commercial" (€140+ retail)
+Solo per pezzi con touchpoint cliente / outdoor display:
+- 2K SprayMax sigillatura (R2-A) — PPE serio richiesto
+- Scagliola italiana intarsiata (R3-B 03) come medaglione decorativo
+- Base/plinth dedicata + nameplate inciso (R1 04-03)
+- Heat-set inserts protocol (R2-D 01) con jig DIY (R3-C 04)
+
+---
+
+## 💰 Cost stack riassuntivo
+
+| Voce | Tier 1 economy | Tier 2 heritage | Tier 3 premium |
+|------|----------------|-----------------|----------------|
+| PLA print 100g | €1.50 | €1.50 | €1.50 |
+| Materiali post | €0.45 | €0.75-1.20 | €2-4 |
+| Tempo umano | 30-50 min | 60-90 min | 2-3 h |
+| Imballaggio | €0.55 | €1-2 | €3-5 |
+| **Costo lotto 25** | ~€15-20 | ~€30-50 | ~€80-150 |
+| **Retail target** | €20-40 | €60-130 | €140+ |
+| **Margine lordo %** | 50-70% | 60-75% | 60-70% |
+
+---
+
+## 🔬 Validare scelte con dati propri (R3-A)
+
+Prima di fissare il workflow definitivo, eseguire **protocollo 14 giorni €39
+totale**:
+- **Cross-hatch tape test** (R3-A 01) — risolve "Maximum BricoIO o MaxMeyer o Plasti-kote?"
+- **ΔE smartphone + ColorChecker DIY** (R3-A 02) — risolve "Pledge basta o serve Mr.Super Clear UV Cut?"
+- **Water bead angle** (R3-A 03) — verifica se Pledge sigilla davvero (insight non banale: forse equivale a PLA nudo)
+
+BOM totale: lametta €1.50 + Scotch €1.20 + ColorChecker stampato €0.50 + lampada UV-A €18 + igrometro €5 + bilancia €8 + siringa €0.10 = **€39 misurati**.
+
+Template Excel radar precompilato in `06_round3/A_diy_test_lab/07_excel_template_radar.md`.
+
+---
+
+## 🛒 Sourcing tier strategico
+
+| Tier | Quando | Dove | Esempio acquisto |
+|------|--------|------|------------------|
+| Test (M1) | Validare qualità | Aliexpress IOSS | Kit €100-150 (heat-set + pigmenti + tools) |
+| Operativo (M2-4) | Volume crescente | Aliexpress + Brico IT | €350 setup + bulk Brico/Leroy |
+| Custom (M5-6) | Brand experience | Alibaba Trade Assurance | Mailer box+sticker logo €1600 |
+| Scaling (M8+) | Spesa annua >€3000 | Agente Yansourcing/EasyChina | Fee 5-8% |
+
+**Top 5 ROI Cina** (R2-F): heat-set €20, pigmenti mica €8, compressore+airbrush €90, PLA+ 10kg €100, light tent €100.
+**NON Cina**: cloni Vallejo/Citadel/Tamiya, bombolette spray (IATA), PPE certificato.
 
 ---
 
@@ -103,39 +120,54 @@ Inserts Cina M3 500 pcs €20 vs Ruthex €60-90 (R2-F).
 
 ```
 PostProcessing/
-  INDEX.md                                  # questo file
-  01_layer_lines_smoothing/                 # ROUND 1
-  02_painting_and_primers/                  # ROUND 1
-  03_ceramic_stone_finish/                  # ROUND 1 — 5 effetti + 10 ricette multi-layer
-  04_sealing_presentation/                  # ROUND 1
+  INDEX.md                                  # questo file (operational guide)
+  01_layer_lines_smoothing/                 # R1 — sanding, filler, smoothing chimico, epoxy
+  02_painting_and_primers/                  # R1 — primer/topcoat/tecniche/effetti/errori
+  03_ceramic_stone_finish/                  # R1 — 5 effetti + 10 ricette multi-layer
+  04_sealing_presentation/                  # R1 — clear coat, UV, base, foto, packaging
   05_round2/
-    A_2k_clearcoat/                         # tier-above, two-tier strategy
-    B_shortcuts_filaments/                  # filamenti speciali + trick consumer
-    C_italia_sourcing/                      # mappa shop IT/EU
-    D_pipeline_industrial/                  # heat-set + ironing + pricing + batch
-    E_diy_budget/                           # ⭐ workflow core <€1/pezzo
-    F_china_bulk/                           # Alibaba/1688/Aliexpress
+    A_2k_clearcoat/                         # R2 — tier-above, two-tier strategy
+    B_shortcuts_filaments/                  # R2 — vase mode+Pledge, kaolin DIY
+    C_italia_sourcing/                      # R2 — mappa shop IT/EU
+    D_pipeline_industrial/                  # R2 — heat-set, ironing, pricing, batch
+    E_diy_budget/                           # ⭐ R2 — workflow core <€1/pezzo
+    F_china_bulk/                           # R2 — Alibaba/1688/Aliexpress
+  06_round3/
+    A_diy_test_lab/                         # ⭐ R3 — protocollo €39 14gg, decisioni con dati
+    B_artisan_recipes/                      # ⭐ R3 — marmorino, shellac, scagliola, casein
+    C_diy_tools_jigs/                       # R3 — spray booth cartone, drying rack, light box
+    D_storytelling_pricing/                 # R3 — narrative, decoy, foto/video DIY <€30
 ```
 
-Ogni cartella: file numerati + `_sources.md` (URL) + `_next_questions.md` (spunti).
+Ogni cartella R3: file numerati + `99_connections.md` (cross-link R1/R2 esplicito) + `_sources.md` + `_next_questions.md`.
 
 ---
 
-## 🔬 Round 3 — gap di conoscenza prioritari (test concreti)
+## 🔗 Cross-links chiave tra round (anti-confusione)
 
-Pattern cross-agent emersi come gap rispetto alla letteratura:
+| Decisione/scelta | File primario | Connessioni |
+|------------------|---------------|-------------|
+| "Quale primer compro?" | R2-E `02_brico_lidl_paints.md` | R3-A `01_cross_hatch` (validare con dato proprio) |
+| "Quale clear coat?" | R2-E `03_hi_impact_low_cost_tricks.md` (Pledge) | R3-A `02_delta_e` + `03_water_bead` |
+| "Effetto marmo realistico" | R1 `03_ceramic.../06_multilayer_recipes.md` #1 | R3-B `02_marmorino_veneziano` (tier sopra) |
+| "Effetto porcellana lucida" | R1 ricetta #3 | R3-B `06_shellac_french_polish` (sostituisce step finale) |
+| "Effetto biscuit autentico" | R2-B `06_kaolin_slurry_diy.md` | R3-B `01_gesso_bolognese` (livellante sotto) |
+| "Spray senza disperdere vapori" | R2-E setup garage | R3-C `01_spray_booth_cardboard` (cattura overspray) |
+| "Heat-set inserts allineati" | R2-D `01_heat_set_inserts_protocol.md` | R3-C `04_heat_set_jig_stl` (fail rate 20%→3-5%) |
+| "Foto prodotto livello pro" | R2-D timeline + R2-E setup | R3-C `03_light_box_cardboard` + R3-D `03_photo_indie_premium_diy` |
+| "Pricing giusto" | R2-D `05_pricing_model.md` cost-plus | R3-D `02_pricing_psychology` decoy + bundling |
+| "Narrative brand" | R1 `04_sealing.../05_packaging_brand` | R3-D `01_storytelling_material_narrative` (per ricetta R3-B) |
 
-1. **Cross-hatch ASTM D3359 misurato** su PLA Bambu Basic per 5 primer (Maximum BricoIO,
-   MaxMeyer, Saratoga, Vallejo, Tamiya). Sostituire stime forum con dati reali.
-2. **Yellowing 12 mesi** Δ-E smartphone+ColorChecker di 5 clear coat (Pledge, MaxMeyer,
-   Plasti-kote, Vallejo Polyurethane, Aliexpress generic).
-3. **Preval sprayer + Pledge decantato** → DIY spray gloss €0.05/pezzo (potenziale replacement Mr.Hobby Premium).
-4. **Time-tracking lotto pilota 10 pezzi** reale con stopwatch per validare timeline R2-D.
-5. **A/B pricing Etsy reale** (€80 / €110 / €140) → conversion rate effettivo.
-6. **Test journal primo ordine Aliexpress** (KPI documentati: tempo, dogana, qualità).
-7. **Marmorino veneziano su PLA primerizzato** (claim teorica forte, mai testato).
-8. **Vase mode multi-perimeter Orca Slicer** su Bambu A1 (vasi >25cm robusti).
+---
 
-I round 1+2 hanno coperto la dimensione **bibliografica e sourcing**. Il round 3
-naturale è **sperimentale**: test casalinghi misurati con protocolli definiti
-(`05_round2/A_2k_clearcoat/04_measurable_test_protocol.md` è il template).
+## 🚀 Round 4 — gap operativi prioritari (test, non più ricerca)
+
+I 3 round bibliografici sono saturi. Round 4 = **passare all'esecuzione misurata**:
+
+1. **Lotto pilota 10-25 pezzi marmorino veneziano con cronometro** — validare empiricamente timeline R2-D + costo R3-B + foto R3-D + pricing R3-D in un singolo ciclo. Sostituire stime con misure.
+2. **Esecuzione protocollo R3-A 14 giorni** — produrre dati propri su 5 primer + 5 clear coat. Compilare il radar template. Decidere il workflow definitivo.
+3. **A/B pricing Etsy reale 4 settimane** su 1 SKU heritage line: €80 / €100 / €120 → conversion rate effettivo.
+4. **Test journal primo ordine Aliexpress €100-150** con KPI documentati (tempi, dogana, qualità) → conferma viability tier-stack sourcing.
+5. **Verifica legale-fiscale**: regime forfettario IT a €5k/€20k/€50k anno + obblighi GPSR 2024 per import filamento Cina (R3-D 10).
+
+Tutto il resto è già nella KB — il prossimo passo è **eseguire**, non leggere di più.
