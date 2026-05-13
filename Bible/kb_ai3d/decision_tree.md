@@ -2,6 +2,8 @@
 
 Logica per scegliere tra i 5 engine MakerLab in base alle caratteristiche del soggetto fotografato. Ottimizzato per il dominio "prodotti decorativi artigianali" stampati FDM mono-colore su Bambu A1.
 
+> **🎯 Default operativo (decisione utente 2026-05-13)**: **Hi3D 2.1 è l'engine primario** per soggetti complessi/decorati. Tripo 3.1 solo per smoke test rapidi su soggetti banali. Vedi anche `tools/hitem3d-2.1.md`.
+
 ---
 
 ## Domanda 1 — Densità di dettaglio scolpito
@@ -166,8 +168,124 @@ Questa domanda è rilevante SOLO per stampe multicolore. Se la stampa è mono-co
 
 ---
 
+## ⚠️ Domande edge case (D7-D15) — strategie per soggetti difficili
+
+Queste domande si applicano **solo** se il soggetto rientra in una di queste categorie. Per soggetti standard (ceramica/gesso/terracotta opaca), proseguire con Domande 0-6.
+
+### D7 — Soggetto trasparente o specchiante?
+
+> Il soggetto è in **vetro, cristallo, ceramica iper-lucida, metallo cromato/specchio**?
+
+| Strategia | Quando |
+|---|---|
+| **Spray opacizzante AESUB Blue** + photogrammetry | Hai l'oggetto fisicamente, accetti di spruzzarlo (rimovibile) |
+| **Cross-polarization rig** (2 filtri polarizzatori) | Hai banco fotografico setup-able |
+| **Gemini → opacizza in foto** (`gemini_prompts/transparency_reflective.md`) | Non hai accesso fisico, accetti perdita info geometrica |
+| **Cerca asset esistente** (Sketchfab, Smithsonian 3D) | Soggetto comune (bicchiere, bottiglia standard) |
+
+**Limite duro**: senza opacizzazione fisica o cross-pol, single-image AI **non funziona** su vetro/specchio. Tutti gli engine vedono solo riflessi.
+
+### D8 — Soggetto peloso, fibroso, tessuto?
+
+> Il soggetto ha **pelo, capelli sciolti, tessuto frangiato, fiori secchi, paglia, fili**?
+
+| Strategia | Quando |
+|---|---|
+| **Stilizza in foto** → continuous bumpy surface | FDM non stampa strand individuali < 0.4mm |
+| **DiffLocks** (workflow specializzato) | Capelli/pelo critici per ritratti |
+| **Modella separato in Blender** + glue | Capelli/fili sono elemento accessorio |
+
+**Limite duro**: FDM (qualunque nozzle) non stampa singoli filamenti < 0.4mm di larghezza. Devi stilizzare a superficie continua.
+
+### D9 — Soggetto articolato, multi-parte, assemblato?
+
+> Il soggetto è **composto da più pezzi distinti** (robot articolato, statua + base separata, oggetto con tappo)?
+
+| Strategia | Quando |
+|---|---|
+| **PartCrafter** (sperimentale, image-to-3D con part segmentation) | Hai accesso al tool, accetti instabilità |
+| **Foto-per-parte** → genera mesh separate → assembla in Blender | Soluzione robusta, più tempo |
+| **Boolean cut Blender** post-mesh blob | Single-shot accettabile come baseline |
+
+**Limite duro**: nessun engine single-image-to-3D 2026 gestisce nativamente part separation. Mesh blob è ineludibile single-shot.
+
+### D10 — Liquido contenuto?
+
+> C'è **liquido visibile dentro una bottiglia/calice/vaso**?
+
+| Strategia | Quando |
+|---|---|
+| **Svuota fisicamente** prima della foto | Hai accesso all'oggetto |
+| **Gemini mask** → cancella liquido in foto | No accesso fisico, contenitore opaco |
+| **Modella liquido separato** in Blender se serve | Multi-color FDM, vuoi separazione AMS |
+
+**Trappola tipica**: AI confonde "liquido + contenitore" → genera mesh unica con discontinuità nel punto di interfaccia.
+
+### D11 — Testo o lettering scolpito < 2mm?
+
+> Il soggetto ha **testo inciso, numeri, lettering scolpito** con tratto < 2mm di larghezza?
+
+| Strategia | Quando |
+|---|---|
+| **Genera mesh** + **ricostruisci testo in Blender** (Text object + Boolean union) | Sempre raccomandato — testo AI è inaffidabile |
+| **Hi3D 2.1 Pro 1536³** con Delight 0.3 (testo conserva ombre = depth) | Testo > 3mm, vuoi single-shot |
+
+**Limite duro FDM A1**: tratto < 0.8mm di larghezza diventa invisibile (1 perimeter line). Pianificare testo come boolean ricostruito.
+
+### D12 — Sottosquadri estremi (gabbia, intreccio chiuso)?
+
+> Il soggetto ha **cavità con accesso stretto** o **strutture intrecciate chiuse** (gabbia, pizzo 3D, intrecci tridimensionali)?
+
+| Strategia | Quando |
+|---|---|
+| **Split & glue** (taglia in Blender, stampa pezzi, incolla) | Asset > 50mm con sottosquadri profondi |
+| **Vase mode hollow** | Soggetto è contenitore, vuoi parete singola |
+| **Resina invece di FDM** | Sottosquadri così stretti che FDM non gestisce |
+
+**Limite duro FDM**: gabbie con celle < 10mm e intrecci con loop chiusi sono **impossibili** in FDM senza supporti interni che poi non rimuovi.
+
+### D13 — Dimensioni estreme (> 256mm o < 10mm)?
+
+> Il soggetto reale è **più grande del piatto A1 (256×256×256mm)** o **microscale (< 10mm)**?
+
+| Strategia | Quando |
+|---|---|
+| **Split orizzontale Blender** + dovetail/pin alignment | > 256mm, mantenere proporzione 1:1 |
+| **Upscale 2-3x** | < 10mm, dettagli illeggibili |
+| **Stampa modulare** (N pezzi assemblabili) | > 400mm, design-friendly |
+| **Resina SLA** | < 10mm con dettaglio fine |
+
+### D14 — Antico, danneggiato, frammento archeologico?
+
+> Il soggetto è **rotto, parzialmente mancante, riconosciuto come reperto storico**?
+
+| Strategia | Quando |
+|---|---|
+| **Mirror simmetrico** (se la parte mancante ha gemello simmetrico) | Soggetto simmetrico, < 50% mancante |
+| **AI inpaint** (`gemini_prompts/archaeological_restoration.md`) | Vuoi "ricostruzione speculativa" |
+| **Mantieni frammento** as-is | Vuoi onestà filologica, niente speculazione |
+| **ORGAN GAN / SD 3D condizionato** | Hai modello AI specializzato disponibile |
+
+**Limite ethico**: > 50% mancante = ricostruzione speculativa, dichiararlo. ⚠️ **Diritti museali italiani** (soprintendenza) per ceramiche storiche.
+
+### D15 — Solo video disponibile, no foto statiche?
+
+> Hai **solo un video** del soggetto (smartphone, drone), niente foto?
+
+| Strategia | Quando |
+|---|---|
+| **Nerfstudio + splatfacto** → 3DGS → Poisson mesh | Video stabile, setup CUDA disponibile |
+| **Keyframe manuale** (estrai 4-8 frame migliori) | Video shaky, fallback |
+| **KIRI Engine** (mobile) | Video iPhone LiDAR, mobile-only |
+| **Luma AI** (3DGS da video) | Video smartphone, no export FDM diretto |
+
+**Limite duro**: video shaky/con motion blur → tutti i workflow falliscono. Stabilizzare prima.
+
+---
+
 ## Quando consultare di nuovo questo file
 
 - **Prima di ogni soggetto**: fai sempre Domanda 0 (apertura?) e Domanda 4 (materiale: gesso o ceramica?) e Domanda 6 (quanti colori FDM?)
+- **Soggetti non standard**: verifica D7-D15 prima di scegliere il tool
 - Dopo un fallimento: salta al tool di rango successivo nella stessa "fascia di densità"
 - Quando aggiungiamo esempi reali in `examples/`, aggiorniamo le risposte con dati empirici

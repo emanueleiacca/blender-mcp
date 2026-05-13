@@ -2,7 +2,12 @@
 
 ## 1. Cos'è e quando usarlo
 
-Meshy-6 (rilascio 18 gennaio 2026) è il modello image-to-3D di Meshy, integrato in MakerLab di MakerWorld accanto a Hunyuan 3.1 e Tripo. Sweet spot storico: **asset game-ready** con **quad topology** e PBR puliti, pensati per pipeline real-time. La v6 ha migliorato la **geometria organica** (volti, anatomia) e gli **edge hard-surface**, ma rimane orientata a output con **polycount contenuto e silhouette pulite**, non alla cattura di micro-dettaglio scolpito.
+Meshy-6 (rilascio 18 gennaio 2026, integrato in MakerLab dal **17 marzo 2026**) è il modello image-to-3D di Meshy. Sweet spot storico: **asset game-ready** con **quad topology** e PBR puliti per pipeline real-time. La v6 ha migliorato la **geometria organica** (volti, anatomia) e gli **edge hard-surface**.
+
+**Verdetto benchmark indipendente 2026** (3DAIStudio "Best AI Tools for 3D Printing 2026"):
+- **97% slicer pass rate** — primo posto su slicer compatibility
+- **55% mesh fully watertight** out-of-the-box — top fra gli engine cloud
+- Tradeoff: smoothing aggressivo sul micro-dettaglio scolpito (cf. Hi3D 1536)
 
 ## 2. Capacità tecniche
 
@@ -10,6 +15,7 @@ Meshy-6 (rilascio 18 gennaio 2026) è il modello image-to-3D di Meshy, integrato
 - **Polycount**: parametro `target_polycount` configurabile da **100 a 300.000**, default **30.000**. Esiste anche `model_type: lowpoly` per real-time
 - **Remesh**: `should_remesh` (default false su Meshy-6 → mesh nativa già triangolare prima del remesh quad opzionale). Salvabile la versione pre-remesh
 - **Symmetry**: `off` / `auto` / `on` ← utilissimo per soggetti assialmente simmetrici (vasi, teste)
+- **AMS multi-color** (Q1 2026): MakerLab integration supporta export 3MF con assegnazione colori AMS per soggetti multicolore (max 4 colori standard AMS A1)
 - **Risoluzione dettagli**: ottima per silhouette e proporzioni; dettagli ornamentali fini (squame, intrecci) tendono ad ammorbidirsi a polycount default
 - **Format export**: GLB, OBJ, FBX, **STL**, USDZ, **3MF**
 - **Multi-view**: NON supportato in image-to-3D di v6 (input singola immagine)
@@ -29,40 +35,61 @@ Meshy-6 (rilascio 18 gennaio 2026) è il modello image-to-3D di Meshy, integrato
 - **Quad remesh** ottimo per topologia, ma può "lisciare" ulteriormente bordi taglienti
 - Su MakerLab l'export costa **2 crediti per file**
 - Output single-mesh, talvolta con elementi sospesi non manifold che richiedono cleanup
+- ⚠️ **Meshy 4** (versione precedente): **DEPRECATA** — API discontinued. Non usare riferimenti a Meshy 4 nei prompt o nei doc
 
 ## 5. Adatto al nostro caso d'uso?
 
-**Parzialmente adatto.**
+**Parzialmente adatto** — secondo per slicer pass rate ma terzo per dettaglio ornamentale.
 
 **Pro**:
-- Simmetria assiale forzabile (perfetta per pigne/vasi)
+- **97% slicer pass rate** (benchmark indipendente 2026) — primo fra i 5 MakerLab
+- **55% mesh fully watertight** out-of-the-box → meno rework Blender per soggetti semplici
+- Simmetria assiale forzabile (perfetta per pigne/vasi semplici)
 - Silhouette pulite, base solida per teste di moro stilizzate
-- Output STL/3MF diretto
+- Output STL/3MF diretto + **AMS multi-color** per stampe multicolore
+- Veloce: 4 minuti su MakerLab
 
 **Contro**:
 - Quad topology **inutile per FDM** (slicer triangola comunque)
-- Smoothing tipico **impoverisce i dettagli ornamentali scolpiti** che caratterizzano queste ceramiche
+- Smoothing tipico **impoverisce i dettagli ornamentali scolpiti** che caratterizzano le ceramiche italiane decorate
+- **Inferiore a Hi3D 2.1** su soggetti strutturalmente occlusi (vaso limoni 2026-05-08: Meshy 6 ha prodotto blob informe per struttura, fronte ok, retro problematico)
 
-**Da preferire SOLO se**:
-- Polycount alto (≥150k)
-- Remesh **disattivato** (`should_remesh=false`, `topology=triangle`)
-- `symmetry=on` su soggetti assiali
+**Da preferire quando**:
+- Soggetto a bassa densità ornamentale (forma scultorea ma superfici prevalentemente lisce)
+- Stampa multicolore con AMS (export 3MF con assegnazione colori)
+- Servono iterazioni rapide e mesh watertight out-of-the-box
+- L'utente NON ha tempo per rework Blender intensivo
+
+**Da NON preferire quando**:
+- Decoro fitto domina (testa di moro, pigna siciliana) → Hi3D 2.1
+- Volti scolpiti dominanti → Rodin Gen 2
+- Soggetti strutturalmente occlusi (decoro 100% parete) → Hi3D 2.1
 
 ⚠️ I parametri fini (target_polycount, topology, symmetry, model_type) **non sono esposti direttamente** nell'UI MakerLab — sono preselezionati dalla pipeline. Per controllo completo serve l'API/web app Meshy diretta.
 
 ## 6. Tempo di generazione (MakerWorld)
 
-**~4 minuti** (confermato da UI MakerWorld, maggio 2026). MakerWorld lo descrive come "Sculpting-level 3D modeling" — descrizione più ambiziosa di quanto emerso dalla ricerca esterna. **Da verificare empiricamente** se questa claim si traduce in dettagli ornamentali migliori del previsto.
+**~4 minuti** (confermato da UI MakerWorld, maggio 2026). MakerWorld lo descrive come "Sculpting-level 3D modeling" — descrizione più ambiziosa di quanto emerso dalla ricerca esterna.
 
 ## 7. Settings/parametri MakerWorld
 
 ⚠️ **Confermato da test reale (2026-05-08)**: nell'UI MakerLab si seleziona **SOLO l'engine** (Meshy 6). Non esistono controlli per target_polycount, topology (quad/triangle), symmetry o should_remesh nell'interfaccia MakerLab. Questi parametri esistono solo nelle API Meshy dirette.
 
 - MakerLab: seleziona **Meshy 6**
-- Export STL/3MF disponibile dopo la generazione
+- Export STL/3MF disponibile dopo la generazione (3MF supporta assegnazione colori AMS)
 - I parametri avanzati richiedono la web app/API Meshy diretta
 
-## 7. Fonti
+## 8. Workflow AMS multi-color (Meshy 6 + Bambu A1 AMS)
+
+Per stampe multicolore con AMS standard (max 4 colori):
+
+1. **Pre-cleanup Gemini**: applica `color_simplification.md` block → unifica le zone cromatiche dell'immagine a 4 colori piatti con bordi netti
+2. **Meshy 6 generazione**: l'engine usa i colori dell'immagine come segnale di separazione geometrica
+3. **Export 3MF** da MakerLab (non STL — STL non porta info colore)
+4. **Bambu Studio**: import 3MF → l'assegnazione colori → AMS dovrebbe essere preservata; verifica manualmente in slicer
+5. **A1**: filamenti caricati nel cestello AMS secondo la mappatura colori
+
+## 9. Fonti
 
 - https://www.meshy.ai/blog/meshy-6-launch
 - https://docs.meshy.ai/en/api/image-to-3d
@@ -72,3 +99,9 @@ Meshy-6 (rilascio 18 gennaio 2026) è il modello image-to-3D di Meshy, integrato
 - https://www.fabbaloo.com/news/bambu-lab-integrates-meshy-6-into-makerlab-expanding-ai-image-to-3d-capabilities
 - https://forum.bambulab.com/t/new-makerlab-tool-image-to-3d-model/76805
 - https://3dshoes.com/news/image-to-3d-print-workflow-meshy-makerworld/
+- https://www.3daistudio.com/best-ai-tools-3d-printing-2026 (benchmark slicer pass rate)
+
+## Changelog
+
+- **2026-05-13**: aggiunto benchmark 97% slicer pass rate + 55% watertight (3DAIStudio 2026). Aggiunto §8 workflow AMS multi-color. Confermato deprecation Meshy 4. Confermato integrazione MakerLab dal 17 mar 2026.
+- **2026-05-08**: confermato che Meshy 6 fallisce su soggetti strutturalmente occlusi (vaso limoni).

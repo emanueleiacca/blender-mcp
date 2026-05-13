@@ -56,20 +56,71 @@ Riferimenti KB Blender:
 
 ---
 
-### Hi3D 2.1
+### Hi3D 2.1 — ENGINE PRIMARIO ⭐
+
+**Sezione estesa** (engine primario del workflow, decisione utente 2026-05-13).
 
 **Difetti tipici**:
 - Triangle soup molto densa (1536³ Pro = ~2M poly!)
-- STL pesanti, lenti da aprire in Blender
+- STL pesanti, lenti da aprire in Blender (>30 sec import)
 - Seam di proiezione su retro non visto (single-view)
+- **Membrane intrinseche** dove decorazione fitta si fonde con parete (Vaso limoni 2026-05-08)
+- Base spuria con base inclinata (riflessi/ombre della foto interpretate come geometria)
 
-**Rework specifico**:
-1. **Prima del pre-flight**: se polycount > 1M, fare un Decimate Geometry con ratio 0.3-0.5 PRIMA di tutto il resto, altrimenti Blender lagga
-2. Pre-flight comune
-3. Verifica seam posteriore: Edit Mode → vista da retro → cerca discontinuità verticali → fixale con Mesh → Clean Up → **Fill Holes** (max edges 4)
-4. Decimate finale a target ~150-200k tri (Bambu Studio non ha bisogno di più)
+**Rework completo H3.1 (10-step protocol)**:
 
-**Tempo medio rework**: 10-25 min (più dei concorrenti per il polycount)
+1. **PRIMA del pre-flight (CRITICO se >1M poly)**: Blender lagga catastroficamente con 2M poly. Decimate Geometry **ratio 0.25-0.40** (target ~500k tri) PRIMA di qualunque altra operazione
+
+2. **Pre-flight comune**: Apply Scale, Merge by Distance 0.0001m, Select All by Trait → Non Manifold (conta)
+
+3. **MCP `analyze_mesh_for_print`** (Bambu KB integration):
+   ```
+   - polycount
+   - non_manifold_edges
+   - non_manifold_verts
+   - holes
+   - overhang_45_pct
+   - quasi_flat_ceiling_pct  ← KEY metric per membrane intrinseche
+   - pca_thickness_ratio
+   - contact_points_count
+   ```
+
+4. **Se `quasi_flat_ceiling_pct > 5%`**: membrane intrinseche presenti
+   - Strategia A: PyMeshLab Ambient Occlusion → eliminare facce con AO < 0.15 (Regola 37 TESTING_LOG)
+   - Strategia B: BVHTree Fibonacci hemisphere raycast (Regola 38)
+   - Vedi `Bible/Blender for 3d print documentation/docs/membrane_removal.md`
+   - **Fallback (Regola 31)**: dopo 2 tentativi falliti, propose Meshmixer alternative — non insistere
+
+5. **Verifica seam posteriore**: Edit Mode → view from back → search discontinuità verticali → Mesh → Clean Up → **Fill Holes** (max edges 4)
+
+6. **Plane-fit SVD su contact points** (Regola 29, per soggetti multi-foot):
+   - Se `contact_points_count >= 3`: usare SVD plane fit sui contact points
+   - Allineare Z=0 al piano di stampa
+   - Verificare con MCP `check_pre_export`
+
+7. **Bisect base spuria** (Regola 34 KISS):
+   - Se la base è inclinata o ha geometria spuria sotto: bisect Z=epsilon (es. 4.98mm sotto il bottom dei feet) → keep upper portion → fill flat
+   - **Non tentare snap vertices** (peggiora la geometria circolare — confermato su vaso limoni)
+
+8. **`check_pre_export` MCP** (Regola 36 OBBLIGATORIA):
+   - `bbox_z_min == 0` (no clipping)
+   - `contact_points_count > 0` (stampabile)
+   - `non_manifold_edges == 0` (slicer-ready)
+   - `holes == 0` (watertight)
+   - Se uno qualunque fallisce: NON esportare, fix prima
+
+9. **HIRES validation** (Regola 30 OBBLIGATORIA):
+   - `render_hires_multiview` MCP a 1920×1440 (4 viste: front/right/top/iso)
+   - Visualizzare i 4 PNG e validare: silhouette, presenza dettagli, base piatta, no buchi visibili
+   - **Mai dichiarare success su low-res screenshot** (storia delle allucinazioni 2026-05-04/08)
+
+10. **Decimate finale** a target ~150-200k tri (Bambu Studio non ha bisogno di più, slicer triangola comunque)
+
+**Tempo medio rework H3.1**: 10-25 min (più dei concorrenti per il polycount + step membrane se serve).
+
+**Casi noti dal campo (Hi3D 2.1)**:
+- ✅ **Vaso limoni 2026-05-08**: unico tool che ha prodotto un mesh lavorabile su soggetto "strutturalmente occluso". Rework: bisect Z=4.98mm, fill_islands=1 (Regola 35 indicator)
+- ⚠️ **Albero corallo 2026-05-XX**: membrane intrinseche post-Hi3D non rimuovibili automaticamente. Workflow: 2 attempt → escalate a Meshmixer (Regola 31)
 
 ---
 
@@ -161,3 +212,74 @@ Questa pagina deve essere **aggiornata empiricamente**. Dopo ogni stampa:
 - Quale operatore Blender ha funzionato meglio?
 
 Annota in `Blender for 3d print documentation/FIELD_NOTES.md` e poi consolida qui i pattern ricorrenti.
+
+---
+
+## Asset naming convention (estende Regola 41 TESTING_LOG)
+
+Pattern community (Patreon/Cults3D/MyMiniFactory) per nomenclatura asset stampabili. Estende la convenzione `relief|wall_art|2.5D|plaque|medallion|lithophane` della Regola 41.
+
+### Pattern completo
+
+```
+{collection}_{piece}_{variant}_{state}_{scale}_{target}_v{NNN}.{ext}
+```
+
+### Componenti
+
+| Componente | Esempi | Note |
+|---|---|---|
+| `{collection}` | `caltagirone`, `pulcinella`, `albero_corallo` | Raccolta o serie |
+| `{piece}` | `pignaCono`, `testaDiMoro`, `vasoLimoni` | camelCase per pezzo specifico |
+| `{variant}` | `blu`, `oro`, `monocromo`, `multicolor`, `M4`, `S`, `L` | Variante stilistica o scala |
+| `{state}` | `raw`, `clean`, `hollow`, `supported`, `split`, `keyed` | Stato del file STL |
+| `{scale}` | `28mm`, `120mm`, `S`, `M`, `L` | Dimensione fisica target |
+| `{target}` | `FDM`, `resin`, `a1`, `x1c`, `mini`, `bust` | Stampante target o use case |
+| `v{NNN}` | `v001`, `v002`, `v015` | Versione (zero-padded) |
+
+### Suffissi di stato (`{state}`)
+
+- `_raw` — appena uscito dal generator (Hi3D, Tripo, ecc.)
+- `_clean` — post-Blender cleanup (non-manifold fix, decimate)
+- `_hollow` — svuotato per Spiral Vase o riduzione filamento
+- `_supported` — supporti già modellati (tree o standard)
+- `_split` — diviso in N pezzi assemblabili
+- `_keyed` — con pin/dovetail per assemblaggio post-stampa
+- `_relief` / `_wall_art` / `_2.5D` / `_plaque` / `_medallion` / `_lithophane` — tela intenzionale (Regola 41)
+
+### Esempi
+
+```
+caltagirone_pignaCono_blu_raw_120mm_a1_v001.stl   ← appena generato Hi3D
+caltagirone_pignaCono_blu_clean_120mm_a1_v002.stl ← post-Blender
+caltagirone_pignaCono_blu_hollow_120mm_a1_v003.stl ← svuotato Spiral Vase
+
+pulcinella_testaDiMoro_oro_clean_S_a1_v001.stl    ← variante piccola, oro
+pulcinella_testaDiMoro_oro_clean_L_x1c_v001.stl   ← variante L per X1C
+
+albero_corallo_membrana_clean_M_a1_v005.stl       ← 5 iterazioni di membrane removal
+
+vaso_limoni_monocromo_bisect_L_a1_v002.stl        ← post-bisect Z=4.98
+```
+
+### Folder structure consigliata
+
+```
+output_stl/
+├── caltagirone/
+│   ├── pignaCono/
+│   │   ├── source/                   ← foto originali
+│   │   ├── gemini/                   ← output Gemini
+│   │   ├── raw/                      ← STL grezzi dei vari tool
+│   │   │   ├── _hi3d.stl
+│   │   │   ├── _tripo.stl
+│   │   │   └── _meshy.stl
+│   │   ├── caltagirone_pignaCono_blu_clean_120mm_a1_v002.stl  ← final
+│   │   └── notes.md                  ← prompt usato, settings, problemi
+```
+
+### Cross-reference
+
+- **Regola 41 TESTING_LOG** — nomenclatura `relief|wall_art|2.5D|plaque|medallion|lithophane`
+- **Loot Studios convention** — pre-supported/separate variants (rifermimento community)
+- **Cults3D / MyMiniFactory upload guidelines** — bundle structure ufficiale
