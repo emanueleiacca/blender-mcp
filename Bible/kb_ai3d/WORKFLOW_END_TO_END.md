@@ -252,3 +252,70 @@ Aggiornare WORKFLOW_END_TO_END.md quando:
 - Nuovi playbook aggiunti → aggiornare elenco stadio 2.4
 - Nuove sub-KB aggiunte → aggiungere stadio o reference
 - Nuovi pattern emergono dall'esperienza → aggiungere stop rule o template messaggio
+
+---
+
+## Workflow professionali community (reference)
+
+Per chi vuole studiare workflow di produzione di scultori commerciali:
+
+| Source | Cosa imparare |
+|---|---|
+| **Loot Studios** (Alvaro Ribeiro) | Pre-supported STL, separate FDM/resin variants, ZBrush + Meshmixer pipeline |
+| **Archvillain Games** Patreon | Tier-based monthly drops, ZBrush WIP timelapses |
+| **MyMiniFactory Creator Portal** | Bundle structure, supports policy |
+| **Dan Kelly (Gumroad)** | ZBrush watertight export, drain holes |
+| **Gnomon Workshop** | Reference course hollow/key/watertight |
+| **Garland — Conservation ceramics + Meshmixer** | Analogo diretto al use case ceramica siciliana |
+
+**Verdetto sintetico AI image-to-3D in produzione (2026)**:
+- ✅ Sì usato, ma come **blockout** — non come hero asset
+- ⚠️ **40-70% del tempo totale** è rework post-AI
+- 📌 **ZBrush domina** il sculpt; Blender per booleane/retopo/non-destructive modifier
+- 📌 **Per ceramica decorativa**: fotogrammetria + ZBrush > qualunque single-image AI per dettagli fini
+- 📌 **Hitem3D + ZBrush 2026 photogrammetry** sono i 2 nomi da seguire
+
+Fonte: deepsearch 2026-05-13 § C (RESEARCH_2026-05-13.md).
+
+---
+
+## Marketing e licensing (per futura monetizzazione)
+
+⚠️ Sezione informativa per chi vuole vendere stampe o STL. Non operativa per il workflow base.
+
+### Piattaforme
+
+| Piattaforma | Use case | Creator earn |
+|---|---|---|
+| **Etsy** | Vendita stampe fisiche, decorativo lifestyle | Variable (commissioni Etsy) |
+| **Cults3D** | Vendita STL (Private Use default; CU-ND per stampe commerciali) | 80% creator |
+| **MyMiniFactory** | Vendita STL + bundle commerciali | Variable, contractual |
+| **Printables** (Bambu) | Free + tip per quality recognition | n/a (gift economy) |
+| **Thangs** | Aggregator + revenue share | Variable |
+
+### Pricing decorativi (riferimento 2026)
+
+- **$15-35** per asset stampato decorativo medio
+- **Margine 65-75%** netto su materiale + tempo macchina (PLA standard)
+- Asset Patreon: $5-15/mese sub model
+
+### Asset bundle structure (community standard)
+
+Per ogni asset commerciale, fornire:
+- 8-10 immagini render (front, side, top, 3/4, detail, scale, lifestyle, finish options)
+- STL pre-supported per FDM + STL hollow per resin
+- README con stampa settings raccomandati
+- License file esplicita
+
+### ⚠️ Diritti italiani (ceramica storica)
+
+Per riproduzione di reperti museali / ceramiche storiche:
+- **Codice dei Beni Culturali D.Lgs 42/2004** — tutela
+- Soprintendenza competente per autorizzazione
+- Per uso commerciale: licenza esplicita necessaria
+- Smithsonian 3D Open Access ha modelli liberi da diritti per molti reperti (alternativa)
+
+### Cross-reference
+
+- `ceramic_filaments.md` — filamenti per look ceramica
+- Deepsearch 2026-05-13 § C6 (RESEARCH_2026-05-13.md)
