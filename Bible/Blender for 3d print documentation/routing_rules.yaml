@@ -261,3 +261,76 @@ rules:
       zero-area (R001 non li cattura) ma il slicer li renderizza come
       micro-gap o segnali di under-extrusion. post_decimate_cleanup
       dissolve degenerate + triangulate riduce l'aspect ratio.
+
+  # R014 fires on significant overhang (rule 25 TESTING_LOG). Triggers a
+  # support-strategy topic and prevents the assistant from defaulting to
+  # "Support: Off" by intuition. analyze_mesh_for_print exposes
+  # overhang_45_pct and quasi_flat_ceiling_pct specifically for this rule.
+  - id: R014
+    priority: 100
+    when:
+      overhang_45_pct: ">= 10"
+    then:
+      topic_id: support_strategy
+      section: tree_support
+      needs_user_input: false
+      expected_after:
+        overhang_45_pct: ">= 10"  # invariato: il fix è in slicer, non in mesh
+    rationale: >
+      Overhang area >= 10% a 45°: forme con sotto-emisferi/limoni/foglie
+      pendenti, cactus con tubercoli, animali con pance e zampe. Mai dichiarare
+      "no support" senza questo check (R25 TESTING_LOG). Il routing
+      proposta è documentale (support_strategy topic) perché la decisione
+      finale è in Bambu Studio: Tree Hybrid 45° è la scelta standard.
+
+  # R015 fires on suspected internal membrane / "tela del fondo" in sculpt
+  # assets. Heuristic: face_count alto + interior_face_pct via raycast > 5%.
+  # Il check raycast richiede una chiamata separata a
+  # compute_face_visibility_bvh PRIMA di applicare questa rule (= la rule
+  # propone il topic_id, l'utente esegue la verifica raycast).
+  - id: R015
+    priority: 95
+    when:
+      face_count: ">= 100000"
+      pca_thickness_ratio: "< 0.10"
+    then:
+      topic_id: membrane_removal
+      section: stop_rule
+      needs_user_input: true
+      expected_after:
+        interior_face_pct_sampled: "< 5"
+    rationale: >
+      Asset con > 100k facce + ratio PCA < 10% (= forma "appiattita / 2.5D")
+      ha probabilità di contenere una "tela del fondo" decorativa intrinseca
+      tipica di sculpt come alberi corallo, gabbie, decori ramificati. R31
+      TESTING_LOG documenta che 8+ tecniche Blender-pure falliscono in
+      questo caso. Il topic membrane_removal guida via filename check (R41)
+      → PyMeshLab AO (R37) → BVHTree raycast (R38) → Meshmixer (R40).
+      needs_user_input=true perché: (a) la verifica nomenclatura asset è
+      manuale, (b) le tecniche AO/raycast richiedono export/re-import o
+      modificano significativamente la mesh — non sono "fix automatici".
+
+  # R016 fires on multi-foot Z misalignment (rule 29 TESTING_LOG).
+  # Caso tipico: animali / figurine in posa naturalistica dove
+  # `obj.location.z = -zmin` semplice mette UNA SOLA zampa sul bed,
+  # le altre restano sospese.
+  - id: R016
+    priority: 100
+    when:
+      contact_points_count: ">= 3"
+    then:
+      topic_id: orientation_strategy
+      section: multi_foot_plane_fit
+      needs_user_input: false
+      expected_after:
+        contact_points_count: ">= 3"  # invariato: il fix è rotazione + Z=0
+    rationale: >
+      Asset con >= 3 punti di contatto al bed (Z < 0.5mm) è tipicamente un
+      animale o figurina multi-piede. R29 TESTING_LOG: allineamento Z=0
+      semplice NON BASTA — serve plane-fit SVD sulle N punte per allineare
+      il piano dei piedi parallelo al bed. Il pre-export check (R36) deve
+      verificare che TUTTI i punti previsti tocchino effettivamente Z=0
+      entro tolleranza 0.5mm. La rule è informativa: alla prossima
+      analyze_mesh_for_print dopo l'orient, contact_points_count deve
+      rimanere stabile (= nessuna zampa "scomparsa" causa rotation troppo
+      aggressiva).

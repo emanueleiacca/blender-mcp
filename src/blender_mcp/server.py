@@ -397,6 +397,258 @@ def analyze_mesh_for_print(ctx: Context, object_name: str) -> str:
         return f"Error analyzing mesh: {str(e)}"
 
 
+@telemetry_tool("analyze_overhang")
+@mcp.tool()
+def analyze_overhang(ctx: Context, object_name: str) -> str:
+    """
+    R25 TESTING_LOG: ritorna metriche overhang e decision tree raccomandata per supporti.
+
+    NON tocca la mesh. Usalo PRIMA di consigliare "Support: Off" — mai dare la
+    decisione per intuito (regola 25 docs/membrane_removal.md).
+
+    Returns JSON con:
+      overhang_45_pct: % area facce con normal.z < cos(45°) sopra il bed
+      quasi_flat_ceiling_pct: % area facce con normal.z < -0.97 (quasi piatto)
+      support_decision: "OFF" | "Auto threshold 45°" | "ON Tree Hybrid OBBLIGATORIO"
+      reasoning: spiegazione della scelta
+
+    Decision tree:
+      pct_45 < 3% AND pct_flat < 1% → OFF
+      pct_45 < 10%                   → Auto Normal
+      pct_45 >= 10%                  → Tree Hybrid OBBLIGATORIO
+
+    Parameters:
+    - object_name: Name of the mesh object to analyze.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("analyze_overhang", {"object_name": object_name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error analyzing overhang: {str(e)}")
+        return f"Error analyzing overhang: {str(e)}"
+
+
+@telemetry_tool("check_pre_export")
+@mcp.tool()
+def check_pre_export(
+    ctx: Context,
+    object_name: str,
+    expected_contact_points: int = 1,
+    z_tolerance_mm: float = 0.5,
+) -> str:
+    """
+    R36 TESTING_LOG: verifica pre-export OBBLIGATORIA prima di wm.stl_export.
+
+    Conferma che:
+    - bbox_z_min == 0 (asset allineato al bed)
+    - contact_points_count >= expected_contact_points
+      (= N "piedi" che effettivamente toccano il bed entro z_tolerance_mm)
+    - mesh è manifold (non_manifold_edges == 0, boundary == 0)
+
+    Caso animale 4 zampe: passa expected_contact_points=4. Caso vaso/base
+    singola: 1.
+
+    Returns JSON con flag ready_to_export + warnings list.
+
+    Parameters:
+    - object_name: Name of the mesh object to check.
+    - expected_contact_points: int, atteso N punti di appoggio (default 1).
+    - z_tolerance_mm: float, tolleranza in mm per considerare un vertice "in contatto"
+      con il bed (default 0.5).
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("check_pre_export", {
+            "object_name": object_name,
+            "expected_contact_points": expected_contact_points,
+            "z_tolerance_mm": z_tolerance_mm,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in check_pre_export: {str(e)}")
+        return f"Error in check_pre_export: {str(e)}"
+
+
+@telemetry_tool("render_hires_multiview")
+@mcp.tool()
+def render_hires_multiview(
+    ctx: Context,
+    object_name: str,
+    views: str = "TOP,BOTTOM,FRONT",
+    resolution_x: int = 1920,
+    resolution_y: int = 1440,
+    output_dir: str = "",
+) -> str:
+    """
+    R30 TESTING_LOG: render OpenGL HIRES multi-vista per validazione visiva.
+
+    Le viste vanno sempre validate ad ALTA risoluzione (1920×1440+) da angolazioni
+    multiple: i render bassi nascondono difetti e portano a falsi positivi
+    "operazione completata" (caso documentato 5+ volte in SESSION 004).
+
+    Parameters:
+    - object_name: Name of the mesh object to render.
+    - views: comma-separated list, valid values: TOP/BOTTOM/FRONT/BACK/LEFT/RIGHT.
+      Default: "TOP,BOTTOM,FRONT".
+    - resolution_x, resolution_y: pixel (default 1920×1440).
+    - output_dir: cartella output (default tempdir di sistema).
+      Suggerito: r"C:\\Users\\<user>\\Desktop\\Bambu\\<progetto>\\screen_mcp"
+    """
+    try:
+        view_list = [v.strip().upper() for v in views.split(",") if v.strip()]
+        blender = get_blender_connection()
+        params = {
+            "object_name": object_name,
+            "views": view_list,
+            "resolution_x": resolution_x,
+            "resolution_y": resolution_y,
+        }
+        if output_dir:
+            params["output_dir"] = output_dir
+        result = blender.send_command("render_hires_multiview", params)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in render_hires_multiview: {str(e)}")
+        return f"Error in render_hires_multiview: {str(e)}"
+
+
+@telemetry_tool("compute_face_visibility_bvh")
+@mcp.tool()
+def compute_face_visibility_bvh(
+    ctx: Context,
+    object_name: str,
+    n_rays: int = 32,
+    vis_threshold: float = 0.10,
+    ray_distance: float = 10.0,
+) -> str:
+    """
+    R38 TESTING_LOG: identifica facce interne (= non visibili dall'esterno) via
+    BVHTree raycast Fibonacci hemisphere. NON cancella nulla, ritorna SOLO la
+    lista degli indici delle facce candidate alla rimozione.
+
+    Per ogni faccia, casta `n_rays` raggi su semisfera lungo la normale. Se
+    `< vis_threshold` frazione di raggi escono dal mesh entro `ray_distance`, la
+    faccia è classificata "interna".
+
+    Usalo per asset sculpt con membrane interne integrate (alberi corallo,
+    gabbie). PRIMA di tentare verifica con regola 41 che la tela NON sia
+    intenzionale (filename contiene `relief|wall_art|2.5D|plaque|medallion|lithophane`).
+
+    Performance: ~30-90s su 250k tri.
+
+    Parameters:
+    - object_name: Name of the mesh object.
+    - n_rays: int, raggi per faccia (16=rapido, 32=bilanciato, 64=preciso).
+    - vis_threshold: float 0..1, soglia visibilità (0.10 aggressivo, 0.30 conservativo).
+    - ray_distance: float, lunghezza massima ray in unità Blender (10.0 default).
+
+    Returns JSON con interior_face_indices (lista int), interior_face_pct, params.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("compute_face_visibility_bvh", {
+            "object_name": object_name,
+            "n_rays": n_rays,
+            "vis_threshold": vis_threshold,
+            "ray_distance": ray_distance,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in compute_face_visibility_bvh: {str(e)}")
+        return f"Error in compute_face_visibility_bvh: {str(e)}"
+
+
+@telemetry_tool("compute_ao_per_vertex_pymeshlab")
+@mcp.tool()
+def compute_ao_per_vertex_pymeshlab(
+    ctx: Context,
+    input_stl_path: str,
+    output_stl_path: str,
+    ao_threshold: float = 0.15,
+    reqviews: int = 128,
+    use_gpu: bool = True,
+) -> str:
+    """
+    R37 TESTING_LOG: rimozione membrana interna via PyMeshLab Ambient Occlusion
+    per-vertex. Opera FUORI Blender via PyMeshLab (libreria standalone).
+
+    Bake AO sui vertici → la membrana interna è "in ombra" (vertici scuri),
+    i dettagli esterni "visibili" (vertici chiari). Cancella facce con TUTTI
+    i 3 vertici sotto soglia ao_threshold.
+
+    Workflow: salva STL da Blender → questo tool → re-importa output STL.
+
+    Parameters:
+    - input_stl_path: Path STL input (export precedentemente da Blender).
+    - output_stl_path: Path STL output con membrana rimossa.
+    - ao_threshold: 0..1, soglia AO sotto la quale i vertici sono "in ombra"
+      (0.10-0.15 conservativo, 0.05 aggressivo). Default 0.15.
+    - reqviews: int, numero raggi AO sphere (128 bilanciato, 256+ preciso).
+    - use_gpu: bool, usa GPU acceleration se disponibile (richiede driver OpenGL).
+
+    Returns JSON con esito + stats.
+    """
+    try:
+        # Esecuzione standalone via pymeshlab — NON serve Blender bridge
+        import pymeshlab
+        ms = pymeshlab.MeshSet()
+        ms.load_new_mesh(input_stl_path)
+        v_before = ms.current_mesh().vertex_number()
+        f_before = ms.current_mesh().face_number()
+
+        # Bake AO per-vertex
+        if use_gpu:
+            try:
+                ms.compute_scalar_ambient_occlusion_gpu(
+                    occmode='per-Vertex',
+                    dirbias=0,
+                    reqviews=reqviews,
+                )
+            except Exception:
+                # Fallback CPU
+                ms.compute_scalar_ambient_occlusion(
+                    occmode='per-Vertex',
+                    dirbias=0,
+                    reqviews=reqviews,
+                )
+        else:
+            ms.compute_scalar_ambient_occlusion(
+                occmode='per-Vertex',
+                dirbias=0,
+                reqviews=reqviews,
+            )
+
+        # Seleziona + delete facce con tutti i vertici sotto soglia
+        cond = f"(q0 < {ao_threshold}) && (q1 < {ao_threshold}) && (q2 < {ao_threshold})"
+        ms.compute_selection_by_condition_per_face(condselect=cond)
+        ms.meshing_remove_selected_faces()
+        ms.meshing_remove_unreferenced_vertices()
+
+        ms.save_current_mesh(output_stl_path)
+        v_after = ms.current_mesh().vertex_number()
+        f_after = ms.current_mesh().face_number()
+
+        return json.dumps({
+            "input_stl": input_stl_path,
+            "output_stl": output_stl_path,
+            "vertex_count_before": v_before,
+            "vertex_count_after": v_after,
+            "face_count_before": f_before,
+            "face_count_after": f_after,
+            "faces_removed": f_before - f_after,
+            "faces_removed_pct": round(100.0 * (f_before - f_after) / f_before, 1) if f_before > 0 else 0,
+            "ao_threshold": ao_threshold,
+            "reqviews": reqviews,
+            "use_gpu": use_gpu,
+        }, indent=2)
+    except ImportError:
+        return "Error: pymeshlab not installed. Run: cd <repo> && uv add pymeshlab"
+    except Exception as e:
+        logger.error(f"Error in compute_ao_per_vertex_pymeshlab: {str(e)}")
+        return f"Error in compute_ao_per_vertex_pymeshlab: {str(e)}"
+
+
 @mcp.prompt()
 def print_prep_strategy() -> str:
     """Defines the preferred strategy for preparing AI-generated STL meshes for FDM 3D printing."""
@@ -435,10 +687,27 @@ Workflow:
 5. Re-run analyze_mesh_for_print. The "ready_to_slice" flag should be True
    and non_manifold_edges should be 0. If not, iterate.
 
-6. Take a get_viewport_screenshot() for visual sanity check (especially after
-   reorientation).
+6. PRE-EXPORT obligatory checks (TESTING_LOG rules 25, 30, 36):
+   - Call analyze_overhang(object_name) → use the support_decision in Bambu settings.
+     Never set "Support: Off" without this check (rule 25).
+   - Call render_hires_multiview(object_name, views="TOP,BOTTOM,FRONT") and INSPECT
+     the actual PNG files (rule 30: low-res renders hide defects, 5+ false-success
+     cases documented in SESSION 004).
+   - Call check_pre_export(object_name, expected_contact_points=N) where N is the
+     number of expected feet/base points (1 for vases, 4 for animals). Block export
+     if ready_to_export is False (rule 36).
 
-7. Export with export_stl(object_name=..., filepath=..., apply_modifiers=True).
+7. For sculpt assets with internal membranes (e.g. coral trees, decorative meshes
+   with "backing" between branches), see docs/membrane_removal.md. Pipeline:
+   - First verify the asset name doesn't contain relief|wall_art|2.5D|plaque
+     (= intentional backing, do NOT remove) — rule 41.
+   - Try compute_face_visibility_bvh(object_name) to identify interior faces.
+   - Or use compute_ao_per_vertex_pymeshlab(input_stl, output_stl) for AO-based
+     removal (faster, more robust on coral-tree-like geometry).
+   - Stop after 2 failed attempts (rule 31): propose Meshmixer manual workflow.
+
+8. Export with export_stl(object_name=..., filepath=..., apply_modifiers=True).
+   File name should end with `_stl.stl` (rule 23).
 
 Hard rules:
 - Never add materials, textures, lighting, or animation. Irrelevant for FDM.

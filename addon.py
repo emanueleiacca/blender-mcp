@@ -162,6 +162,10 @@ class BlenderMCPServer:
             "import_stl": self.import_stl,
             "export_stl": self.export_stl,
             "analyze_mesh_for_print": self.analyze_mesh_for_print,
+            "analyze_overhang": self.analyze_overhang,
+            "check_pre_export": self.check_pre_export,
+            "render_hires_multiview": self.render_hires_multiview,
+            "compute_face_visibility_bvh": self.compute_face_visibility_bvh,
         }
 
         handler = handlers.get(cmd_type)
@@ -437,6 +441,11 @@ class BlenderMCPServer:
             hull_ratio = self._convex_hull_volume_ratio(bm)
             surface_area = self._surface_area_mm2(bm)
             com_xyz = self._center_of_mass_mm(bm)
+            # New metrics (TESTING_LOG rules 25, 27, 29)
+            overhang_45_pct = self._overhang_pct(bm, threshold=-0.707)  # cos(45°)
+            quasi_flat_ceiling_pct = self._overhang_pct(bm, threshold=-0.97)  # almost-horizontal ceiling
+            pca_thickness_ratio = self._pca_thickness_ratio(bm)
+            contact_points_count = self._contact_points_count(bm)
 
             result = {
                 "object": obj.name,
@@ -462,6 +471,11 @@ class BlenderMCPServer:
                 "convex_hull_volume_ratio": hull_ratio,
                 "surface_area_mm2": surface_area,
                 "center_of_mass_mm": com_xyz,
+                # New (rules 25, 27, 29)
+                "overhang_45_pct": overhang_45_pct,
+                "quasi_flat_ceiling_pct": quasi_flat_ceiling_pct,
+                "pca_thickness_ratio": pca_thickness_ratio,
+                "contact_points_count": contact_points_count,
             }
             result["ready_to_slice"] = (
                 watertight
@@ -470,6 +484,269 @@ class BlenderMCPServer:
                 and normals_status == "consistent"
             )
             return result
+        finally:
+            bm.free()
+            eval_obj.to_mesh_clear()
+
+    def analyze_overhang(self, object_name):
+        """R25 TESTING_LOG: ritorna metriche overhang + decision tree raccomandata
+        per supporti. NON tocca la mesh.
+
+        Returns:
+            {
+              "overhang_45_pct": float 0..100,
+              "quasi_flat_ceiling_pct": float 0..100,
+              "support_decision": "OFF" | "Auto threshold 45°" | "ON Tree Hybrid OBBLIGATORIO",
+              "reasoning": str
+            }
+        """
+        obj = bpy.data.objects.get(object_name)
+        if not obj:
+            raise ValueError(f"Object not found: {object_name}")
+        if obj.type != 'MESH':
+            raise TypeError(f"Object {object_name} is not a mesh")
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        eval_obj = obj.evaluated_get(depsgraph)
+        mesh = eval_obj.to_mesh()
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(mesh)
+            bm.normal_update()
+            pct_45 = self._overhang_pct(bm, threshold=-0.707) or 0.0
+            pct_flat = self._overhang_pct(bm, threshold=-0.97) or 0.0
+            # Decision tree (regola 25)
+            if pct_45 < 3 and pct_flat < 1:
+                decision = "OFF"
+                reasoning = "Overhang minimo, supporti non necessari"
+            elif pct_45 < 10:
+                decision = "Auto threshold 45° (Normal)"
+                reasoning = f"Overhang moderato ({pct_45}% a 45°), supporti standard"
+            else:
+                decision = "ON Tree Hybrid OBBLIGATORIO"
+                reasoning = f"Overhang significativo ({pct_45}% a 45°, {pct_flat}% quasi-piatto): Tree Hybrid mandatory"
+            return {
+                "object": obj.name,
+                "overhang_45_pct": pct_45,
+                "quasi_flat_ceiling_pct": pct_flat,
+                "support_decision": decision,
+                "reasoning": reasoning,
+            }
+        finally:
+            bm.free()
+            eval_obj.to_mesh_clear()
+
+    def check_pre_export(self, object_name, expected_contact_points=1, z_tolerance_mm=0.5):
+        """R36 TESTING_LOG: verifica pre-export OBBLIGATORIA.
+
+        Checks:
+        - bbox_z_min == 0 (asset allineato al bed)
+        - contact_points_count >= expected_contact_points (= N piedi che toccano bed)
+        - manifold (non_manifold_edges == 0, boundary == 0)
+
+        Returns:
+            {
+              "object": str,
+              "bbox_z_min_mm": float,
+              "aligned_to_bed": bool,
+              "contact_points_count": int,
+              "expected_contact_points": int,
+              "all_points_touching": bool,
+              "manifold_ok": bool,
+              "ready_to_export": bool,
+              "warnings": [str]
+            }
+        """
+        obj = bpy.data.objects.get(object_name)
+        if not obj:
+            raise ValueError(f"Object not found: {object_name}")
+        if obj.type != 'MESH':
+            raise TypeError(f"Object {object_name} is not a mesh")
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        eval_obj = obj.evaluated_get(depsgraph)
+        mesh = eval_obj.to_mesh()
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(mesh)
+            bm.normal_update()
+            mm = self._mm_per_unit()
+            z_min_mm = min(v.co.z for v in bm.verts) * mm
+            aligned = abs(z_min_mm) < 0.01  # entro 10 micron
+            cp_count = self._contact_points_count(bm, z_tolerance_mm=z_tolerance_mm)
+            nm = sum(1 for e in bm.edges if not e.is_manifold)
+            boundary = sum(1 for e in bm.edges if len(e.link_faces) == 1)
+            manifold_ok = (nm == 0 and boundary == 0)
+            warnings = []
+            if not aligned:
+                warnings.append(f"BBOX_Z_min = {round(z_min_mm, 3)} mm, NON allineato (atteso 0)")
+            if cp_count < expected_contact_points:
+                warnings.append(f"Solo {cp_count} punti contatto, attesi {expected_contact_points} (R29: alcuni piedi sospesi?)")
+            if not manifold_ok:
+                warnings.append(f"Mesh non manifold ({nm} nm_edges, {boundary} boundary)")
+            return {
+                "object": obj.name,
+                "bbox_z_min_mm": round(z_min_mm, 4),
+                "aligned_to_bed": aligned,
+                "contact_points_count": cp_count,
+                "expected_contact_points": expected_contact_points,
+                "all_points_touching": cp_count >= expected_contact_points,
+                "manifold_ok": manifold_ok,
+                "non_manifold_edges": nm,
+                "boundary_edges": boundary,
+                "ready_to_export": aligned and (cp_count >= expected_contact_points) and manifold_ok,
+                "warnings": warnings,
+            }
+        finally:
+            bm.free()
+            eval_obj.to_mesh_clear()
+
+    def render_hires_multiview(self, object_name, views=None, resolution_x=1920, resolution_y=1440, output_dir=None):
+        """R30 TESTING_LOG: render OpenGL HIRES multi-vista per validazione visiva.
+
+        views: lista di stringhe ['TOP','BOTTOM','FRONT','BACK','LEFT','RIGHT'].
+        Salva PNG in output_dir (default: tempdir) con nomi _<view>.png.
+        Returns dict con path dei file generati.
+        """
+        if views is None:
+            views = ['TOP', 'BOTTOM', 'FRONT']
+        valid_views = {'TOP', 'BOTTOM', 'FRONT', 'BACK', 'LEFT', 'RIGHT'}
+        for v in views:
+            if v not in valid_views:
+                raise ValueError(f"Invalid view '{v}'. Valid: {valid_views}")
+
+        obj = bpy.data.objects.get(object_name)
+        if not obj:
+            raise ValueError(f"Object not found: {object_name}")
+
+        if output_dir is None:
+            output_dir = tempfile.gettempdir()
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Setup
+        scn = bpy.context.scene
+        orig_res_x = scn.render.resolution_x
+        orig_res_y = scn.render.resolution_y
+        orig_filepath = scn.render.filepath
+        scn.render.resolution_x = resolution_x
+        scn.render.resolution_y = resolution_y
+
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+        rendered_files = {}
+        try:
+            for view in views:
+                filepath = os.path.join(output_dir, f"_{object_name}_{view.lower()}.png")
+                scn.render.filepath = filepath
+                for area in bpy.context.screen.areas:
+                    if area.type != 'VIEW_3D':
+                        continue
+                    for space in area.spaces:
+                        if space.type == 'VIEW_3D':
+                            space.shading.type = 'SOLID'
+                            space.shading.color_type = 'OBJECT'
+                            space.shading.show_xray = False
+                            space.region_3d.view_perspective = 'ORTHO'
+                    with bpy.context.temp_override(area=area, region=area.regions[-1]):
+                        bpy.ops.view3d.view_axis(type=view)
+                        bpy.ops.view3d.view_all()
+                        bpy.ops.render.opengl(view_context=True, write_still=True)
+                    break
+                rendered_files[view] = filepath
+        finally:
+            scn.render.resolution_x = orig_res_x
+            scn.render.resolution_y = orig_res_y
+            scn.render.filepath = orig_filepath
+
+        return {
+            "object": obj.name,
+            "resolution": [resolution_x, resolution_y],
+            "rendered_files": rendered_files,
+            "n_views": len(rendered_files),
+        }
+
+    def compute_face_visibility_bvh(self, object_name, n_rays=32, vis_threshold=0.10, ray_distance=10.0):
+        """R38 TESTING_LOG: BVHTree raycast hemisphere per identificare facce interne
+        (= candidate alla rimozione perché non visibili dall'esterno).
+
+        Per ogni faccia, casta n_rays su semisfera Fibonacci lungo la normale.
+        Se < vis_threshold (frazione) raggi escono dal mesh → faccia interna.
+
+        NON cancella nulla, ritorna SOLO la lista degli indici da considerare.
+        Decision di delete è dell'utente / playbook successivo.
+
+        Returns:
+            {
+              "object": str,
+              "total_faces": int,
+              "interior_face_indices": [int],
+              "interior_face_count": int,
+              "interior_face_pct": float,
+              "params": {n_rays, vis_threshold, ray_distance}
+            }
+        """
+        import math
+        from mathutils.bvhtree import BVHTree
+        from mathutils import Vector
+
+        obj = bpy.data.objects.get(object_name)
+        if not obj:
+            raise ValueError(f"Object not found: {object_name}")
+        if obj.type != 'MESH':
+            raise TypeError(f"Object {object_name} is not a mesh")
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        eval_obj = obj.evaluated_get(depsgraph)
+        mesh = eval_obj.to_mesh()
+        bm = bmesh.new()
+        interior = []
+        try:
+            bm.from_mesh(mesh)
+            bm.normal_update()
+            bm.faces.ensure_lookup_table()
+            bvh = BVHTree.FromBMesh(bm)
+            EPS = 1e-4
+
+            # Fibonacci hemisphere points (locale, asse Z up)
+            base_pts = []
+            for i in range(n_rays):
+                phi = math.acos(1 - (i + 0.5) / n_rays)
+                theta = math.pi * (1 + 5 ** 0.5) * i
+                base_pts.append(Vector((
+                    math.sin(phi) * math.cos(theta),
+                    math.sin(phi) * math.sin(theta),
+                    math.cos(phi),
+                )))
+
+            total = len(bm.faces)
+            for f in bm.faces:
+                if f.normal.length_squared <= 0:
+                    continue
+                origin = f.calc_center_median() + f.normal * EPS
+                rot = Vector((0, 0, 1)).rotation_difference(f.normal).to_matrix()
+                free = 0
+                for d_local in base_pts:
+                    d = rot @ d_local
+                    hit, *_ = bvh.ray_cast(origin, d, ray_distance)
+                    if hit is None:
+                        free += 1
+                if free / n_rays < vis_threshold:
+                    interior.append(f.index)
+
+            return {
+                "object": obj.name,
+                "total_faces": total,
+                "interior_face_indices": interior,
+                "interior_face_count": len(interior),
+                "interior_face_pct": round(100.0 * len(interior) / total, 1) if total > 0 else 0.0,
+                "params": {
+                    "n_rays": n_rays,
+                    "vis_threshold": vis_threshold,
+                    "ray_distance": ray_distance,
+                },
+            }
         finally:
             bm.free()
             eval_obj.to_mesh_clear()
@@ -714,6 +991,160 @@ class BlenderMCPServer:
             round((cy / total_area) * mm, 3),
             round((cz / total_area) * mm, 3),
         ]
+
+    def _overhang_pct(self, bm, threshold=-0.707, bed_z_offset=0.5):
+        """Percentuale di area facce con normal.z sotto soglia (= overhang/ceiling).
+
+        threshold=-0.707 (cos 45°) → R25 pct_overhang_45.
+        threshold=-0.97 (~14° dall'orizzontale) → R25 quasi_flat_ceiling.
+        bed_z_offset: escludi facce con centro Z < bed_z_offset (= la backplane voluta
+        sul bed) per non contare la base come overhang.
+
+        Returns float 0..100, None se nessuna faccia.
+        """
+        if len(bm.faces) == 0:
+            return None
+        total = 0.0
+        below = 0.0
+        for f in bm.faces:
+            if f.normal.length_squared <= 0:
+                continue
+            a = f.calc_area()
+            total += a
+            if f.normal.z < threshold:
+                center = f.calc_center_median()
+                if center.z > bed_z_offset:
+                    below += a
+        if total <= 0:
+            return None
+        return round(100.0 * below / total, 1)
+
+    def _pca_thickness_ratio(self, bm):
+        """Rapporto autovalore minimo / massimo della covarianza dei vertici (PCA).
+
+        R27 TESTING_LOG: <10% → bassorilievo netto, anche se piano inclinato.
+        10-30% → ambiguo. >30% → asset 3D pieno.
+
+        Returns float 0..1, None se < 4 vertici.
+        """
+        n = len(bm.verts)
+        if n < 4:
+            return None
+        try:
+            # Estrai coordinate via foreach_get equivalente puro Python
+            coords = [v.co for v in bm.verts]
+            # Centroide
+            cx = sum(c.x for c in coords) / n
+            cy = sum(c.y for c in coords) / n
+            cz = sum(c.z for c in coords) / n
+            # Covarianza simmetrica 3x3
+            sxx = syy = szz = sxy = sxz = syz = 0.0
+            for c in coords:
+                dx, dy, dz = c.x - cx, c.y - cy, c.z - cz
+                sxx += dx * dx
+                syy += dy * dy
+                szz += dz * dz
+                sxy += dx * dy
+                sxz += dx * dz
+                syz += dy * dz
+            sxx /= n; syy /= n; szz /= n
+            sxy /= n; sxz /= n; syz /= n
+            # Eigenvalues di matrice simmetrica 3x3 via formula chiusa (Smith 1961).
+            # Tracce di potenza usate per evitare dipendenza numpy nell'addon Blender.
+            from mathutils import Matrix
+            M = Matrix(((sxx, sxy, sxz), (sxy, syy, syz), (sxz, syz, szz)))
+            # mathutils non espone eigenvalues. Calcolo via determinante + traccia
+            # NB: per uso solo come ratio, usiamo proxy via SVD-equivalente:
+            # M = R @ D @ R^T → autovalori sono i valori sulla diagonale D
+            # Approccio robusto: power iteration su matrice 3x3.
+            # SOLUZIONE SEMPLICE: usa diagonalizzazione tramite iterazioni Jacobi.
+            evals = self._jacobi_eigenvalues_3x3(M)
+            evals.sort()  # ascending
+            if evals[2] <= 1e-12:
+                return None
+            return round(evals[0] / evals[2], 4)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _jacobi_eigenvalues_3x3(M, max_iter=20, tol=1e-9):
+        """Jacobi rotation per matrice simmetrica 3x3. Restituisce 3 autovalori."""
+        import math
+        # Estrae elementi
+        a = [[M[0][0], M[0][1], M[0][2]],
+             [M[1][0], M[1][1], M[1][2]],
+             [M[2][0], M[2][1], M[2][2]]]
+        for _ in range(max_iter):
+            # Trova off-diagonal max
+            p, q = 0, 1
+            mx = abs(a[0][1])
+            if abs(a[0][2]) > mx:
+                p, q, mx = 0, 2, abs(a[0][2])
+            if abs(a[1][2]) > mx:
+                p, q, mx = 1, 2, abs(a[1][2])
+            if mx < tol:
+                break
+            # Rotazione
+            theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]) if a[p][q] != 0 else 0
+            t = math.copysign(1.0 / (abs(theta) + math.sqrt(theta * theta + 1)), theta) if theta != 0 else 1.0
+            c = 1.0 / math.sqrt(1 + t * t)
+            s = t * c
+            # Applica rotazione
+            app = a[p][p]
+            aqq = a[q][q]
+            apq = a[p][q]
+            a[p][p] = c * c * app - 2 * s * c * apq + s * s * aqq
+            a[q][q] = s * s * app + 2 * s * c * apq + c * c * aqq
+            a[p][q] = 0.0
+            a[q][p] = 0.0
+            for r in range(3):
+                if r != p and r != q:
+                    arp = a[r][p]
+                    arq = a[r][q]
+                    a[r][p] = c * arp - s * arq
+                    a[p][r] = a[r][p]
+                    a[r][q] = s * arp + c * arq
+                    a[q][r] = a[r][q]
+        return [a[0][0], a[1][1], a[2][2]]
+
+    def _contact_points_count(self, bm, z_tolerance_mm=0.5, cluster_radius_mm=8.0):
+        """Numero di "piedi" che toccano il bed (cluster XY di vertici a Z basso).
+
+        R29 TESTING_LOG: per animali/figurine multi-piede, verifica che N punti
+        di appoggio raggiungano effettivamente il bed (Z < tolerance).
+
+        Returns int >= 0.
+        """
+        mm = self._mm_per_unit()
+        z_tol_bu = z_tolerance_mm / mm
+        r_bu = cluster_radius_mm / mm
+        r2 = r_bu * r_bu
+        # Vertici a Z basso
+        low_verts = [v.co for v in bm.verts if v.co.z < z_tol_bu]
+        if not low_verts:
+            return 0
+        # DBSCAN-like cluster XY
+        n = len(low_verts)
+        assigned = [-1] * n
+        clusters = 0
+        for i in range(n):
+            if assigned[i] != -1:
+                continue
+            stack = [i]
+            while stack:
+                j = stack.pop()
+                if assigned[j] != -1:
+                    continue
+                assigned[j] = clusters
+                for k in range(n):
+                    if assigned[k] != -1:
+                        continue
+                    dx = low_verts[j].x - low_verts[k].x
+                    dy = low_verts[j].y - low_verts[k].y
+                    if dx * dx + dy * dy < r2:
+                        stack.append(k)
+            clusters += 1
+        return clusters
 
     @staticmethod
     def _count_boundary_loops(boundary_edges):
