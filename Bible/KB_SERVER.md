@@ -56,7 +56,7 @@ Una directory è considerata "KB root" valida se contiene `CLAUDE.md` E almeno u
 
 ## Setup in `.mcp.json`
 
-Il file `Bible/.mcp.json` ha già due placeholder da sostituire (path assoluti):
+Il template è `Bible/.mcp.json.template`. **Copialo a `Bible/.mcp.json`** (gitignorato) e sostituisci i due placeholder con i path assoluti reali del tuo sistema:
 
 ```json
 {

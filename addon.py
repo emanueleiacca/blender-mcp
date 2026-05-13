@@ -17,7 +17,7 @@ from contextlib import redirect_stdout
 bl_info = {
     "name": "Blender MCP (Print Prep)",
     "author": "BlenderMCP",
-    "version": (1, 3),
+    "version": (1, 5, 5),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to Claude via MCP for STL print-prep workflow",

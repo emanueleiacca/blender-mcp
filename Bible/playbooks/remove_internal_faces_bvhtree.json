@@ -1,0 +1,64 @@
+{
+  "id": "remove_internal_faces_bvhtree",
+  "title": "Rimozione facce interne via BVHTree raycast hemisphere (nativo Blender)",
+  "when_to_use": "Alternativa Blender-nativa al playbook remove_internal_membrane_ao (PyMeshLab). Usare se PyMeshLab non è disponibile o se preferisci restare 100% in Blender senza export/re-import. Stesso target: facce interne non visibili dall'esterno in asset sculpt 3D con membrane decorative integrate. Regola 38 TESTING_LOG.",
+  "preconditions": [
+    "Asset come bpy.data.objects[object_name], type='MESH'",
+    "mathutils.bvhtree disponibile (nativo Blender 4.x+)",
+    "Asset di dimensioni ragionevoli per raycast (250k tri ≈ 30-90s con N_RAYS=32)",
+    "Filename asset NON contiene: relief|wall_art|2.5D|plaque|medallion|lithophane (regola 41)",
+    "Eseguito DOPO recalc_normals (le normali devono puntare all'esterno per correttezza raycast)"
+  ],
+  "params": {
+    "object_name": {"type": "string", "required": true},
+    "n_rays": {"type": "integer", "default": 32, "description": "Numero raggi nella semisfera Fibonacci. 16 = rapido approx, 32 = bilanciato, 64+ = preciso ma 2-4x più lento."},
+    "vis_threshold": {"type": "number", "default": 0.10, "description": "Frazione minima di raggi 'liberi' (= non colpiscono niente entro ray_distance) per considerare faccia 'visibile'. Sotto questa soglia, faccia interna → cancellata. 0.10 = pass aggressivo, 0.30 = pass conservativo."},
+    "ray_distance": {"type": "number", "default": 10.0, "description": "Lunghezza massima raycast in unità Blender. Deve coprire l'intero modello (10 = 10mm con scale_length=0.001)."},
+    "epsilon": {"type": "number", "default": 1e-4, "description": "Offset origin raycast dalla faccia (evita self-hit). Tieni piccolo."}
+  },
+  "steps": [
+    {
+      "label": "Recalc normals (precondizione)",
+      "tool": "execute_blender_code",
+      "code": "import bpy, bmesh\nobj = bpy.data.objects['{object_name}']\nme = obj.data\nbm = bmesh.new(); bm.from_mesh(me)\nbmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))\nbm.to_mesh(me); bm.free(); me.update()\nprint('normals recalc done, faces:', len(me.polygons))"
+    },
+    {
+      "label": "Build BVH + raycast hemisphere per ogni faccia",
+      "tool": "execute_blender_code",
+      "code": "import bpy, bmesh, math\nfrom mathutils.bvhtree import BVHTree\nfrom mathutils import Vector\n\nobj = bpy.data.objects['{object_name}']\nbm = bmesh.new(); bm.from_mesh(obj.data); bm.faces.ensure_lookup_table()\nbvh = BVHTree.FromBMesh(bm)\n\nEPS = {epsilon}; N_RAYS = {n_rays}; VIS_T = {vis_threshold}; RAY_D = {ray_distance}\n\ndef fib_hemi(n):\n    pts = []\n    for i in range(n):\n        phi = math.acos(1 - (i + 0.5) / n)\n        theta = math.pi * (1 + 5**0.5) * i\n        pts.append(Vector((math.sin(phi)*math.cos(theta), math.sin(phi)*math.sin(theta), math.cos(phi))))\n    return pts\n\nbase = fib_hemi(N_RAYS)\nto_delete = []\nfor f in bm.faces:\n    origin = f.calc_center_median() + f.normal * EPS\n    rot = Vector((0,0,1)).rotation_difference(f.normal).to_matrix()\n    free = 0\n    for d_local in base:\n        d = rot @ d_local\n        hit, *_ = bvh.ray_cast(origin, d, RAY_D)\n        if hit is None: free += 1\n    if free / N_RAYS < VIS_T:\n        to_delete.append(f)\n\nprint(f'faces to delete (interior): {len(to_delete)} / {len(bm.faces)}')\nbmesh.ops.delete(bm, geom=to_delete, context='FACES')\nbm.to_mesh(obj.data); bm.free()\nobj.data.update()\nprint('done; remaining faces:', len(obj.data.polygons))"
+    },
+    {
+      "label": "Cleanup non-manifold post-delete (print3d clean)",
+      "tool": "execute_blender_code",
+      "code": "import bpy\nobj = bpy.data.objects['{object_name}']\nbpy.ops.object.select_all(action='DESELECT')\nobj.select_set(True); bpy.context.view_layer.objects.active = obj\nbpy.ops.object.mode_set(mode='EDIT')\nbpy.ops.mesh.select_all(action='SELECT')\nbpy.ops.mesh.print3d_clean_non_manifold()\nbpy.ops.object.mode_set(mode='OBJECT')\nprint('print3d_clean done')"
+    },
+    {
+      "label": "(Opzionale) Pass conservativo 0.30 sulle facce di bordo del cancellato",
+      "tool": "execute_blender_code",
+      "note": "Solo se i bordi della rimozione presentano facce 'di transizione' visibili in HIRES. Eseguire il blocco principale di nuovo con vis_threshold=0.30 e n_rays=64.",
+      "code": "# Modificare e re-eseguire lo step 'Build BVH + raycast' con vis_threshold=0.30 se serve secondo pass\nprint('skip optional pass — re-run step 2 with higher threshold if HIRES verification mostra residui')"
+    }
+  ],
+  "verification": {
+    "tool": "render_hires_multiview_then_inspect",
+    "args": {"object_name": "{object_name}", "resolution": "1920x1440", "views": ["TOP", "BOTTOM", "user_perspective"]},
+    "expect": {
+      "non_manifold_edges": "<= 100 (residual boundary, accept)",
+      "shells": "1 (asset connesso)",
+      "interior_face_pct_sampled": "< 5%",
+      "hires_visual_check": "membrana centrale sparita, rami intatti"
+    },
+    "notes": "Validazione HIRES OBBLIGATORIA (regola 30 TESTING_LOG). Mai dichiarare success senza render multi-vista 1920x1440."
+  },
+  "fallback": {
+    "trigger": "Dopo 2 tentativi (es. vis_threshold 0.10 + retry 0.30), risultato HIRES non soddisfacente",
+    "next_playbook": "remove_internal_membrane_ao (PyMeshLab AO, regola 37) OPPURE workflow Meshmixer manuale (regola 40)"
+  },
+  "topic_refs": ["membrane_removal", "bmesh_scripting", "mathutils"],
+  "tested_on_cases": [
+    {
+      "asset": "albero_corallo (SESSION 004)",
+      "notes": "Tentativo originale via curvature analysis ha avuto timeout RPC. Implementazione BVH vettorizzata via mathutils.bvhtree è O(log n), molto più veloce. DA TESTARE sull'asset reale."
+    }
+  ]
+}

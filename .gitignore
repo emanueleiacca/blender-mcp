@@ -15,6 +15,9 @@ wheels/
 # Local config secrets
 src/blender_mcp/config.py
 
+# Resolved MCP config (= per-user paths). Use Bible/.mcp.json.template as starting point.
+Bible/.mcp.json
+
 # Claude local/project metadata
 Bible/.claude/
 

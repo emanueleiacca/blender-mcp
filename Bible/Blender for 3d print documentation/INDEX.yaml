@@ -8,7 +8,8 @@
 # solves_symptoms: keys aligned with the output of analyze_mesh_for_print:
 #   non_manifold_edges, boundary_loops, disconnected_shells, degenerate_faces,
 #   normals_inverted, dimensions_wrong, polycount_high, thin_walls,
-#   overhangs, self_intersection, too_large_for_bed, not_oriented_for_print
+#   overhangs, self_intersection, too_large_for_bed, not_oriented_for_print,
+#   internal_membrane, interior_faces
 #
 # This file is parsed by blender-kb. INDEX.md remains the human-readable source
 # of truth for titles and "Quando usarlo". This file only adds structured fields.
@@ -282,3 +283,11 @@ topics:
     # Anti-pattern doc: it explicitly recommends against hollowing in Blender
     # for FDM and to delegate infill to the slicer. Kept as a stop-sign.
     related: [fdm_printing_constraints]
+
+  - id: membrane_removal
+    band: A
+    # Topic critico estratto da TESTING_LOG SESSION 003e + 004 + Appendice A.
+    # Stop rule documentata: dopo 2 tentativi falliti, propone alternative manuali (Meshmixer).
+    # Pipeline raccomandata: PyMeshLab AO → BVHTree raycast → Meshmixer.
+    solves_symptoms: [internal_membrane, interior_faces, disconnected_shells]
+    related: [mesh_quality_assessment, blender_3d_print_toolbox, hollowing_and_lightening, bisect_splitting]

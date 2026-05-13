@@ -292,6 +292,13 @@ File: `docs/hollowing_and_lightening.md`
 
 Contenuto: quando ha senso svuotare vs usare infill slicer (regola: per FDM non svuotare in Blender — usare infill), apply_solidify_for_print() (thickness mm→BU, offset -1.0 interno, use_even_offset, use_rim), hollow_solid_mesh() con Boolean Difference + cutter invertito + fori di scarico, tabella pattern infill (Grid/Gyroid/Honeycomb/Lightning/Cubic — resistenza/tempo/materiale), densità infill per caso d'uso (10–100%), Wall Count vs Infill Density tradeoff.
 
+## [membrane_removal]
+**Rimozione di "tele del fondo" / membrane decorative interne in asset sculpt 3D**
+Quando usarlo: asset sculpt con superficie piatta interna decorativa tra dettagli sporgenti (alberi corallo, decori ramificati), e l'utente vuole "rami separati con spazi vuoti". CRITICO: leggere PRIMA la regola primaria — la maggior parte dei casi NON è automatizzabile via Blender pura.
+File: `docs/membrane_removal.md`
+
+Contenuto: regola primaria + stop rule dopo 2 tentativi falliti, decision tree con check nomenclatura asset (`relief`/`wall_art`/`2.5D`/`plaque`/`medallion`/`lithophane` = tela intenzionale), 4 tecniche con priorità decrescente: (1) PyMeshLab Ambient Occlusion per-vertex con snippet completo + alternative SDF e Volumetric Obscurance, (2) Blender BVHTree raycast hemisphere con implementazione Fibonacci, (3) Meshmixer Select+Expand to Connected+Discard workflow manuale, (4) Bambu Studio Mesh Boolean / Negative Part. Validazione HIRES obbligatoria (regola 30). Casi storici documentati (`albero_corallo` 8+ tecniche fallite, `vaso_limoni` snap distorcente).
+
 ## [ai_mesh_recipe]
 **Pipeline completa mesh AI-generated → STL FDM: 8 CALL Blender MCP, repair, decimazione, export**
 Quando usarlo: hai ricevuto un mesh da generatore AI (TripoSG, Hunyuan3D, Rodin — GLB/OBJ), devi portarlo a STL stampabile su Bambu A1 con pipeline step-by-step eseguibile via execute_blender_code

@@ -1,0 +1,63 @@
+{
+  "id": "remove_internal_membrane_ao",
+  "title": "Rimozione membrana interna via Ambient Occlusion per-vertex (PyMeshLab)",
+  "when_to_use": "Asset sculpt 3D con \"tela del fondo\" topologicamente integrata tra dettagli sporgenti (alberi corallo, decori ramificati). Solo se il nome asset NON contiene marker di tela intenzionale (relief|wall_art|2.5D|plaque|medallion|lithophane — vedi regola 41 in TESTING_LOG.md). Pipeline raccomandata #1 per il caso 'membrana intrinseca' (regola 37 TESTING_LOG).",
+  "preconditions": [
+    "pymeshlab installato nel venv (vedi pyproject.toml: pymeshlab>=2025.7.post1)",
+    "Asset disponibile come STL su disco (export da Blender se necessario)",
+    "Asset sculpt 3D con cavità/concavità esterne ben definite (l'AO discrimina interno/esterno via visibilità a raggi luce)",
+    "Filename asset NON contiene: relief|wall_art|2.5D|plaque|medallion|lithophane (regola 41)",
+    "Eseguire dal venv del progetto: cd C:\\Users\\emanu\\blender-mcp && uv run python ..."
+  ],
+  "params": {
+    "input_stl_path": {"type": "string", "required": true, "description": "Path STL input"},
+    "output_stl_path": {"type": "string", "required": true, "description": "Path STL output con membrana rimossa"},
+    "ao_threshold": {"type": "number", "default": 0.15, "description": "Soglia AO sotto la quale i vertici sono 'in ombra' (= membrana interna). 0.10-0.15 conservativo, 0.05 aggressivo. Tutti i 3 vertici di una faccia devono essere sotto soglia per cancellarla."},
+    "reqviews": {"type": "integer", "default": 128, "description": "Numero raggi AO sphere (più alto = più stabile, più lento). 128 = bilanciato, 256+ = preciso, 64 = rapido."},
+    "use_gpu": {"type": "boolean", "default": true, "description": "Se True usa GPU compute_scalar_ambient_occlusion_gpu (richiede driver OpenGL). Fallback a CPU se False o GPU non disponibile."}
+  },
+  "steps": [
+    {
+      "label": "Load STL into PyMeshLab MeshSet",
+      "tool": "shell",
+      "code": "uv run python -c \"import pymeshlab; ms = pymeshlab.MeshSet(); ms.load_new_mesh('{input_stl_path}'); print('loaded', ms.current_mesh().vertex_number(), 'vertices')\""
+    },
+    {
+      "label": "Bake AO per-vertex",
+      "tool": "shell",
+      "note": "Strategia: compute_scalar_ambient_occlusion bake un valore scalare per vertex. Vertici 'in ombra' (interni alla membrana) → q vicino a 0. Vertici 'visibili' (esterni rami) → q vicino a 1.",
+      "code": "uv run python -c \"import pymeshlab; ms = pymeshlab.MeshSet(); ms.load_new_mesh('{input_stl_path}'); method = ms.compute_scalar_ambient_occlusion_gpu if {use_gpu} else ms.compute_scalar_ambient_occlusion; method(occmode='per-Vertex', dirbias=0, reqviews={reqviews}); ms.save_current_mesh('{output_stl_path}.ao_baked.ply')\""
+    },
+    {
+      "label": "Select + delete facce con tutti 3 vertici sotto soglia AO",
+      "tool": "shell",
+      "code": "uv run python -c \"import pymeshlab; ms = pymeshlab.MeshSet(); ms.load_new_mesh('{output_stl_path}.ao_baked.ply'); ms.compute_selection_by_condition_per_face(condselect='(q0 < {ao_threshold}) && (q1 < {ao_threshold}) && (q2 < {ao_threshold})'); ms.meshing_remove_selected_faces(); ms.meshing_remove_unreferenced_vertices(); ms.save_current_mesh('{output_stl_path}')\""
+    },
+    {
+      "label": "Cleanup file temporaneo .ao_baked.ply",
+      "tool": "shell",
+      "code": "rm '{output_stl_path}.ao_baked.ply'"
+    }
+  ],
+  "verification": {
+    "tool": "analyze_mesh_for_print",
+    "args": {"object_name": "{output_stl_path}"},
+    "expect": {
+      "shells": 1,
+      "non_manifold_edges": "<= 100 (small residual at boundary, fixable via print3d_clean)",
+      "interior_face_pct_sampled": "< 5%"
+    },
+    "notes": "Re-importa l'STL output in Blender, esegui analyze_mesh_for_print. Dopo l'operazione: la silhouette TOP/BOTTOM HIRES deve mostrare vuoti reali tra i rami (NO membrana piatta). Validare con render 1920x1440 multi-vista (regola 30 TESTING_LOG)."
+  },
+  "fallback": {
+    "trigger": "Dopo 2 tentativi (con threshold 0.15 e 0.05) la membrana è ancora visibile in HIRES verification",
+    "next_playbook": "Considerare passaggio a workflow Meshmixer manuale (regola 40 TESTING_LOG) — NON iterare ulteriormente in automazione (regola 31: stop dopo 2 fallimenti)"
+  },
+  "topic_refs": ["membrane_removal", "ai_mesh_recipe"],
+  "tested_on_cases": [
+    {
+      "asset": "albero_corallo (SESSION 003e + 004)",
+      "notes": "Caso prototipo per cui questo playbook è stato creato. In Blender pure tutte le 8+ tecniche tentate hanno fallito. PyMeshLab AO non è stato ancora testato sull'asset reale (l'utente ha accettato l'asset con membrana intrinseca). DA TESTARE alla prossima session."
+    }
+  ]
+}

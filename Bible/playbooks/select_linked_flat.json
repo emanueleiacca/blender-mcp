@@ -1,0 +1,45 @@
+{
+  "id": "select_linked_flat",
+  "title": "Select Linked Flat — replica esatta dell'operatore Blender via bmesh BFS",
+  "when_to_use": "Devi selezionare TUTTE le facce coplanari connesse a una face seed (= operatore Blender UI \"Select Linked Flat Faces\", Ctrl+L con delimit Sharp). Utile per identificare superfici piatte interne (tele, backplane interne) ESCLUDENDO il flood-fill su curve fluide adiacenti. Regola 39 TESTING_LOG: replica 1:1 dell'algoritmo C di Blender (editmesh_select.cc::edbm_faces_select_linked_flat_exec).",
+  "preconditions": [
+    "Asset come bpy.data.objects[object_name], type='MESH'",
+    "Conosci l'indice di una face seed (= face sul piano target). Identificabile via:\n  - face_index manuale dall'utente\n  - face con n_z > 0.99 a quota Z specifica (regola 32: filtra candidate)\n  - mouse pick in viewport (separato)"
+  ],
+  "params": {
+    "object_name": {"type": "string", "required": true},
+    "seed_face_index": {"type": "integer", "required": true, "description": "Indice della face seed (bm.faces[seed_face_index] sarà il punto di partenza del flood-fill)"},
+    "sharpness_deg": {"type": "number", "default": 1.0, "description": "Soglia angolare in GRADI tra normali di facce adiacenti per propagare. Default Blender UI: 1°. Range tipico: 0.5° (CAD piano puro), 1° (Blender UI), 5° (mesh triangolata fitta da scan). MAI > 10° (cattura curve fluide tassellate)."},
+    "global_anchor": {"type": "boolean", "default": false, "description": "Se true, applica anche un filtro globale post-flood-fill: scarta facce con dot(face.normal, seed.normal) < cos(global_threshold_deg). Pattern raccomandato per evitare 'curve leak'."},
+    "global_threshold_deg": {"type": "number", "default": 5.0, "description": "Solo se global_anchor=true. Soglia globale facce vs seed."}
+  },
+  "steps": [
+    {
+      "label": "Flood-fill BFS edge-per-edge con edge.calc_face_angle",
+      "tool": "execute_blender_code",
+      "note": "Algoritmo 1:1 con C di Blender. Test angolo via BMEdge.calc_face_angle (più robusto di dot prodotto puro su mesh sporche).",
+      "code": "import bpy, bmesh, math\nfrom collections import deque\n\nobj = bpy.data.objects['{object_name}']\nbm = bmesh.new(); bm.from_mesh(obj.data); bm.faces.ensure_lookup_table()\nseed = bm.faces[{seed_face_index}]\nsharpness = math.radians({sharpness_deg})\n\nvisited = {{seed.index}}\nqueue = deque([seed])\nwhile queue:\n    f = queue.popleft()\n    for e in f.edges:\n        if not e.is_manifold:\n            continue\n        angle = e.calc_face_angle(None)\n        if angle is None or angle > sharpness:\n            continue\n        for nf in e.link_faces:\n            if nf.index in visited:\n                continue\n            visited.add(nf.index)\n            queue.append(nf)\n\n# Optional global anchor filter\nif {global_anchor}:\n    from mathutils import Vector\n    global_t = math.radians({global_threshold_deg})\n    n_seed = seed.normal\n    filtered = set()\n    for idx in visited:\n        f = bm.faces[idx]\n        if math.acos(max(-1.0, min(1.0, f.normal.dot(n_seed)))) <= global_t:\n            filtered.add(idx)\n    visited = filtered\n\nprint(f'linked-flat result: {len(visited)} faces selected')\n# Esponi la selezione in Edit Mode per ispezione visiva\nbm.to_mesh(obj.data); bm.free()\n\nbpy.ops.object.select_all(action='DESELECT')\nobj.select_set(True); bpy.context.view_layer.objects.active = obj\nbpy.ops.object.mode_set(mode='EDIT')\nbpy.ops.mesh.select_all(action='DESELECT')\nbpy.ops.object.mode_set(mode='OBJECT')\nfor idx in visited:\n    obj.data.polygons[idx].select = True\nbpy.ops.object.mode_set(mode='EDIT')\nbpy.ops.mesh.select_mode(type='FACE')\nprint('selection materialized in Edit Mode')"
+    }
+  ],
+  "verification": {
+    "tool": "render_hires_multiview_then_inspect",
+    "args": {"object_name": "{object_name}", "highlight_selection": true},
+    "expect": {
+      "selected_faces_count": "> 0",
+      "selection_extent_xy_mm2": "matches expected planar surface size",
+      "visual_check": "selection copre solo il piano target, non si estende su curve fluide adiacenti"
+    },
+    "notes": "Validazione HIRES OBBLIGATORIA. Se la selezione 'leak' su curve adiacenti (=cattura facce dei rami), ridurre sharpness_deg (es. 0.5°) e abilitare global_anchor=true. Caso albero_corallo: con sharpness=1° il flood-fill catturava 17039 facce inclusi pezzi di rami; con global_anchor=true filtrava solo il piano vero."
+  },
+  "alternative_pattern_via_bpy_ops": {
+    "description": "Pattern UI-corretto di Blender per 'selezionare solo il piano vero, fermandosi alle curve': mark edges sharp + select_linked_pick con delimit SHARP. Più robusto su mesh con dettaglio fine sui rami.",
+    "code": "import bpy, math\nbpy.ops.object.mode_set(mode='EDIT')\nbpy.ops.mesh.select_all(action='DESELECT')\nbpy.ops.mesh.edges_select_sharp(sharpness=math.radians(30))\nbpy.ops.mesh.mark_sharp()\nbpy.ops.mesh.select_all(action='DESELECT')\n# (seleziona seed face via bmesh o mouse pick)\nbpy.ops.mesh.select_linked(delimit={'SHARP'})"
+  },
+  "topic_refs": ["membrane_removal", "bmesh_scripting", "mesh_repair"],
+  "tested_on_cases": [
+    {
+      "asset": "albero_corallo (SESSION 003e)",
+      "notes": "Mio tentativo con flood-fill manuale Python ha fallito perché propagava su curve fluide. Implementazione corretta usa edge.calc_face_angle (non dot product puro) + global anchor filter opzionale. Caso documentato come fallimento prima della scoperta del pattern corretto via ricerca web."
+    }
+  ]
+}

@@ -23,7 +23,7 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 
 [Support this project](https://github.com/sponsors/ahujasid)
 
-## Current version (1.6.0 — print-prep refocus)
+## Current version (1.5.5 — print-prep refocus)
 
 This fork removed the Polyhaven / Sketchfab / Hyper3D Rodin / Hunyuan3D
 asset-generation tools to focus on the STL cleanup workflow. The MCP server
