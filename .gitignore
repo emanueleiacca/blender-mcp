@@ -33,8 +33,18 @@ Bible/Research materials/
 Bible/sessions/_private/*
 !Bible/sessions/_private/.gitkeep
 
-# Moldboxer study folder: contains decompiled bytecode + partial source of
-# a commercial Blender add-on. The MCP integration (addon.py mb_* handlers +
-# server.py mb_* tools) references this folder via sys.path bootstrap, but
-# the contents themselves are local-only study material — do not publish.
-MoldboxerStudy/
+# MoldboxerStudy folder:
+# - decompiled bytecode + partial source of a commercial Blender add-on
+#   are local-only study material — keep gitignored.
+# - moldboxer_lite/ (clean-room reconstruction written by the user from
+#   understanding of the public API) + .md docs (user's own analysis)
+#   ARE original work and can be committed.
+MoldboxerStudy/decompiled/
+MoldboxerStudy/decompiled_py/
+MoldboxerStudy/moldboxer_silicone/
+MoldboxerStudy/portable_config/
+MoldboxerStudy/mbx.ico
+MoldboxerStudy/Moldboxer Guide*.txt
+# Live-test artefacts produced during validation (large STLs + screenshots)
+MoldboxerStudy/live_test_*.png
+MoldboxerStudy/live_test_export/
