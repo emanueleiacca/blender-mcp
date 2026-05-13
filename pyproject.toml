@@ -18,6 +18,7 @@ dependencies = [
     "supabase>=2.0.0",
     "tomli>=2.0.0",
     "pyyaml>=6.0",
+    "pymeshlab>=2025.7.post1",
 ]
 
 [project.scripts]
