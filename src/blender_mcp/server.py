@@ -649,6 +649,368 @@ def compute_ao_per_vertex_pymeshlab(
         return f"Error in compute_ao_per_vertex_pymeshlab: {str(e)}"
 
 
+# ---------------------------------------------------------------------------
+# Moldboxer integration tools
+#
+# Six MCP tools that wrap the `moldboxer_lite` reconstruction library
+# (study + replica of the commercial Moldboxer 1.4.9 silicone-mold add-on).
+# All geometry runs inside Blender via the addon handler; this side just
+# forwards JSON. See MoldboxerStudy/CLAUDE.md for the full architecture.
+# ---------------------------------------------------------------------------
+
+
+@telemetry_tool("mb_setup_mm")
+@mcp.tool()
+def mb_setup_mm(ctx: Context) -> str:
+    """
+    Configure the active Blender scene to use millimeter units.
+
+    Call this ONCE at the very start of a Moldboxer pipeline so that distances
+    (gap, channel width/depth, key size, …) in the other mb_* tools are
+    interpreted as mm.
+
+    No parameters. Returns JSON with {"ok": true, "unit": "MILLIMETERS"}.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("mb_setup_mm", {})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in mb_setup_mm: {str(e)}")
+        return f"Error in mb_setup_mm: {str(e)}"
+
+
+@telemetry_tool("mb_preprocess_patron")
+@mcp.tool()
+def mb_preprocess_patron(
+    ctx: Context,
+    object_name: str = None,
+    master_quality: str = "HIGH",
+    center: bool = True,
+    isolate: bool = False,
+) -> str:
+    """
+    Preprocess the imported master mesh as the `patron` for a mold pipeline.
+
+    Renames the target object to 'patron', applies transforms, optionally
+    snaps it to the origin (Z=0 at the bottom), and runs a voxel heal pass
+    if the mesh is non-manifold.
+
+    Call this AFTER mb_setup_mm and AFTER importing the STL (e.g. via
+    `import_stl`). Without this step the auto_box / auto_flat tools may
+    fail because they expect a clean, centered, manifold patron at Z=0.
+
+    Parameters:
+    - object_name: Name of the object to preprocess. If None, uses the active
+      object in the scene.
+    - master_quality: "FAST" | "MID" | "HIGH" | "ULTRA". Controls voxel
+      detail for the heal pass (HIGH is the Moldboxer default).
+    - center: If True, snap XY to origin and put the bottom at Z=0.
+    - isolate: If True, join disconnected sub-meshes (filtered by volume).
+
+    Returns JSON with the patron summary (dimensions_mm, bbox).
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("mb_preprocess_patron", {
+            "object_name": object_name,
+            "master_quality": master_quality,
+            "center": center,
+            "isolate": isolate,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in mb_preprocess_patron: {str(e)}")
+        return f"Error in mb_preprocess_patron: {str(e)}"
+
+
+@telemetry_tool("mb_auto_box")
+@mcp.tool()
+def mb_auto_box(
+    ctx: Context,
+    patron_name: str = "patron",
+    box_gap: float = 4.5,
+    box_quality: str = "MID",
+    channel_width: float = 5.0,
+    channel_depth: float = 6.0,
+    adjust_to_contour: bool = True,
+    larger_back: bool = True,
+    funneler: bool = True,
+    safe_mode: bool = False,
+) -> str:
+    """
+    Generate a 2-part silicone mold box around the preprocessed patron.
+
+    Client-side replica of Moldboxer's `silicone.auto_box` (replaces the
+    POST /auto-box/ server call). Builds a voxel-wrapped offset hull, adds
+    side channels for clamps, a funneler/deposit on top, then carves the
+    inner cavity by subtracting the patron.
+
+    Call AFTER mb_preprocess_patron. Call mb_confirm_mold AFTER this to
+    split the box on Y, add the base + volume text + interlock keys.
+
+    Parameters:
+    - patron_name: Name of the patron object (default "patron").
+    - box_gap: Silicone thickness in mm (Moldboxer default 4.5).
+    - box_quality: "FAST" | "MID" | "HIGH" | "ULTRA" (voxel detail).
+    - channel_width, channel_depth: Channel size in mm.
+    - adjust_to_contour: Snap channels to the master contour (currently
+      uniform spacing in moldboxer_lite — may differ from the server).
+    - larger_back: Use a larger radius for the back channel.
+    - funneler: Add a top funneler/deposit for casting.
+    - safe_mode: Build the wrapper from a sphere fallback (slower, safer).
+
+    Returns JSON with the 'box' object summary (name, dimensions, bbox).
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("mb_auto_box", {
+            "patron_name": patron_name,
+            "box_gap": box_gap,
+            "box_quality": box_quality,
+            "channel_width": channel_width,
+            "channel_depth": channel_depth,
+            "adjust_to_contour": adjust_to_contour,
+            "larger_back": larger_back,
+            "funneler": funneler,
+            "safe_mode": safe_mode,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in mb_auto_box: {str(e)}")
+        return f"Error in mb_auto_box: {str(e)}"
+
+
+@telemetry_tool("mb_auto_flat")
+@mcp.tool()
+def mb_auto_flat(
+    ctx: Context,
+    patron_name: str = "patron",
+    box_gap: float = 4.5,
+    box_quality: str = "MID",
+    grip_height: float = 10.0,
+    open_top_margin: float = 2.0,
+    add_volume_text: bool = False,
+) -> str:
+    """
+    Generate a 1-piece, open-top silicone mold with a side grip ("Flat
+    Automatic Box" in Moldboxer terms).
+
+    Suitable for short or flat masters that demold by pulling the silicone
+    straight up. Not suitable for masters with overhangs/undercuts — use
+    mb_auto_box for those.
+
+    Call AFTER mb_preprocess_patron. No mb_confirm_mold needed afterwards
+    (flat molds are single-piece).
+
+    Parameters:
+    - patron_name: Name of the patron object (default "patron").
+    - box_gap: Silicone thickness in mm (Moldboxer default 4.5).
+    - box_quality: "FAST" | "MID" | "HIGH" | "ULTRA".
+    - grip_height: Side grip cube edge length in mm.
+    - open_top_margin: How much of the top is cut to leave the cavity open.
+    - add_volume_text: Stamp the silicone volume in ml on the side.
+
+    Returns JSON with the 'box' object summary.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("mb_auto_flat", {
+            "patron_name": patron_name,
+            "box_gap": box_gap,
+            "box_quality": box_quality,
+            "grip_height": grip_height,
+            "open_top_margin": open_top_margin,
+            "add_volume_text": add_volume_text,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in mb_auto_flat: {str(e)}")
+        return f"Error in mb_auto_flat: {str(e)}"
+
+
+@telemetry_tool("mb_confirm_mold")
+@mcp.tool()
+def mb_confirm_mold(
+    ctx: Context,
+    patron_name: str = "patron",
+    box_name: str = "box",
+    join_patron: bool = True,
+    master_base_pin: bool = True,
+    n_splits: int = 2,
+    add_keys: bool = True,
+    key_count: int = 4,
+    key_size: float = 4.0,
+    key_tolerance: float = 0.2,
+    voxel_size: float = 0.8,
+    space_objects: bool = True,
+) -> str:
+    """
+    Finalize a 2-part mold built by mb_auto_box: compute silicone volume,
+    add the base + wing + volume text, split on Y, add interlock keys.
+
+    Client-side replica of Moldboxer's `silicone.confirm` (replaces the
+    POST /confirm-silicone-mold/ server call).
+
+    Parameters:
+    - patron_name, box_name: Object names from earlier steps.
+    - join_patron: "Fixed Master" mode — master and base merge into a single
+      part. Use this for casting workflows where the master stays embedded.
+    - master_base_pin: Add a centering pin under the master (only when
+      join_patron is False).
+    - n_splits: 0 (keep single box, no split) or 2 (split on Y).
+    - add_keys: Add interlock keys on the split faces.
+    - key_count, key_size, key_tolerance: Key shape params in mm.
+    - voxel_size: Final cleanup voxel in mm.
+    - space_objects: Spread {patron, mold, silicone_preview} along X for
+      visual inspection (matches the original Moldboxer behaviour).
+
+    Returns JSON with all output object names + silicone volume in mm³.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("mb_confirm_mold", {
+            "patron_name": patron_name,
+            "box_name": box_name,
+            "join_patron": join_patron,
+            "master_base_pin": master_base_pin,
+            "n_splits": n_splits,
+            "add_keys": add_keys,
+            "key_count": key_count,
+            "key_size": key_size,
+            "key_tolerance": key_tolerance,
+            "voxel_size": voxel_size,
+            "space_objects": space_objects,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in mb_confirm_mold: {str(e)}")
+        return f"Error in mb_confirm_mold: {str(e)}"
+
+
+@telemetry_tool("mb_export_parts")
+@mcp.tool()
+def mb_export_parts(
+    ctx: Context,
+    dir_path: str,
+    apply_modifiers: bool = True,
+) -> str:
+    """
+    Export every mesh in the scene as STL into `dir_path`.
+
+    File naming follows the Moldboxer convention:
+      - objects containing 'patron' or 'silicone' → `<name>_<volume_ml>ml.stl`
+      - other objects → `<name>.stl`
+
+    Call this LAST in a Moldboxer pipeline. The directory is created if it
+    doesn't exist.
+
+    Parameters:
+    - dir_path: Output directory (absolute path).
+    - apply_modifiers: Bake modifiers into the exported geometry (recommended).
+
+    Returns JSON with the count and list of files written.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("mb_export_parts", {
+            "dir_path": dir_path,
+            "apply_modifiers": apply_modifiers,
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error in mb_export_parts: {str(e)}")
+        return f"Error in mb_export_parts: {str(e)}"
+
+
+@mcp.prompt()
+def mold_strategy() -> str:
+    """Defines the preferred strategy for generating a silicone mold from a 3D master model."""
+    return """Your job: take a 3D master model (STL or already-loaded mesh) and
+generate a silicone mold ready to be 3D-printed in rigid material (PLA / resin),
+filled with silicone, and used to cast copies of the master in soft material.
+
+This is the Moldboxer-style pipeline, reconstructed client-side. You will not
+call any external server; all geometry runs locally in Blender via the mb_* tools.
+
+DECISION TREE - which mold style?
+
+| Master shape | Tool | Notes |
+|---|---|---|
+| 3D with depth, full sculpt | mb_auto_box | 2-half mold split on Y. Default for figurines, busts. |
+| Flat / shallow relief / 2.5D | mb_auto_flat | 1-piece, open-top with side grip. Demold by pulling. |
+| Has overhangs / undercuts | mb_auto_box | Flat won't release. Box may need clear_extraction (not yet implemented). |
+
+WORKFLOW (mb_auto_box, the common case):
+
+1. mb_setup_mm()
+   Configure scene units to millimeters. Always first.
+
+2. import_stl(filepath=<absolute path to master.stl>)
+   Or use the already-active object if the user pre-loaded the master.
+
+3. mb_preprocess_patron(object_name=<name from step 2>,
+                       master_quality="HIGH", center=True)
+   Renames to 'patron', applies transforms, centers (Z=0 at bottom),
+   voxel-heals if non-manifold.
+
+4. mb_auto_box(patron_name="patron",
+              box_gap=4.5,             # silicone thickness in mm
+              box_quality="MID",
+              channel_width=5.0,
+              channel_depth=6.0,
+              funneler=True)
+   Builds box wrapper + channels + funneler + carves cavity.
+   Inspect the result via get_viewport_screenshot() BEFORE confirming.
+
+5. mb_confirm_mold(patron_name="patron", box_name="box",
+                  n_splits=2, add_keys=True, key_count=4)
+   Splits on Y, adds base + volume text + interlock keys.
+   Returns volume_mm3 so the user knows how much silicone to buy.
+
+6. mb_export_parts(dir_path=<output dir>)
+   Writes patron + silicone preview + mold halves (box_l, box_r) as STL,
+   one per file. Naming includes silicone volume in ml for the patron and
+   silicone preview.
+
+FLAT WORKFLOW (mb_auto_flat):
+
+1. mb_setup_mm()
+2. import_stl(filepath=...)
+3. mb_preprocess_patron(...)
+4. mb_auto_flat(patron_name="patron", box_gap=4.5, grip_height=10.0)
+   One-piece mold, no confirm step needed.
+5. mb_export_parts(dir_path=...)
+
+KEY PARAMETERS - what the user usually cares about:
+
+- box_gap (default 4.5): silicone wall thickness in mm. 3-4 for small parts,
+  5-6 for bigger ones or low-quality silicone. Less than 3 mm risks tearing.
+- box_quality: FAST = preview, MID = default, HIGH = clean output,
+  ULTRA = render-quality (slow on big masters).
+- key_size (default 4 mm), key_count (default 4): interlock keys to keep
+  the two halves aligned. Increase count for tall molds (10cm+).
+- join_patron (default True): "Fixed Master" mode — master and base merge.
+  If user wants to keep the master separate, set False.
+- n_splits=0: keep the box as a single piece (no Y split, no keys).
+
+PITFALLS / KNOWN LIMITS (moldboxer_lite reconstruction):
+
+- adjust_to_contour=True is implemented as uniform spacing, NOT true raycast
+  contour. Result may differ from the commercial Moldboxer output on
+  highly irregular masters.
+- Interlock keys are cubic, not truncated pyramids. They work but are less
+  elegant than the original.
+- clear_extraction (undercut relief) is NOT implemented. If the master has
+  deep undercuts, the mold may bind during demolding.
+- Pro features (inner cavity, 2-part silicone) are NOT implemented.
+
+After generating the mold, use the standard print-prep tools
+(analyze_mesh_for_print, check_pre_export) on each STL part before sending
+it to the slicer.
+"""
+
+
 @mcp.prompt()
 def print_prep_strategy() -> str:
     """Defines the preferred strategy for preparing AI-generated STL meshes for FDM 3D printing."""

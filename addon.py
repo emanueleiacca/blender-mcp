@@ -17,7 +17,7 @@ from contextlib import redirect_stdout
 bl_info = {
     "name": "Blender MCP (Print Prep)",
     "author": "BlenderMCP",
-    "version": (1, 5, 5),
+    "version": (1, 6, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to Claude via MCP for STL print-prep workflow",
@@ -166,6 +166,13 @@ class BlenderMCPServer:
             "check_pre_export": self.check_pre_export,
             "render_hires_multiview": self.render_hires_multiview,
             "compute_face_visibility_bvh": self.compute_face_visibility_bvh,
+            # Moldboxer integration (silicone mold pipeline via moldboxer_lite)
+            "mb_setup_mm": self.mb_setup_mm,
+            "mb_preprocess_patron": self.mb_preprocess_patron,
+            "mb_auto_box": self.mb_auto_box,
+            "mb_auto_flat": self.mb_auto_flat,
+            "mb_confirm_mold": self.mb_confirm_mold,
+            "mb_export_parts": self.mb_export_parts,
         }
 
         handler = handlers.get(cmd_type)
@@ -750,6 +757,271 @@ class BlenderMCPServer:
         finally:
             bm.free()
             eval_obj.to_mesh_clear()
+
+    # ---------- Moldboxer integration handlers ----------
+    #
+    # These dispatch to the `moldboxer_lite` library kept under
+    # MoldboxerStudy/moldboxer_lite/ (study + reconstruction folder, sibling to
+    # this addon). The library is pure-Python+bpy and runs in the Blender
+    # process (here). We bootstrap sys.path on first use; the library itself
+    # must not be installed into Blender's site-packages.
+    #
+    # See: MoldboxerStudy/CLAUDE.md and MoldboxerStudy/moldboxer_lite/INTEGRATION.md
+
+    _moldboxer_path_bootstrapped = False
+
+    def _bootstrap_moldboxer(self):
+        """Add MoldboxerStudy/ to sys.path so `import moldboxer_lite` works.
+
+        Searches relative to addon.py first (deployment scenario) then falls
+        back to a known absolute path. Idempotent.
+        """
+        import sys
+        if BlenderMCPServer._moldboxer_path_bootstrapped:
+            return
+        # 1. Sibling of addon.py: <repo>/MoldboxerStudy/
+        addon_dir = os.path.dirname(os.path.abspath(__file__))
+        candidates = [
+            os.path.join(addon_dir, "MoldboxerStudy"),
+            # 2. Common absolute fallback (workstation default).
+            r"C:\Users\emanu\blender-mcp\MoldboxerStudy",
+        ]
+        for cand in candidates:
+            if os.path.isdir(os.path.join(cand, "moldboxer_lite")):
+                if cand not in sys.path:
+                    sys.path.insert(0, cand)
+                BlenderMCPServer._moldboxer_path_bootstrapped = True
+                return
+        raise RuntimeError(
+            "Cannot locate moldboxer_lite library. Looked in: "
+            + ", ".join(candidates)
+        )
+
+    @staticmethod
+    def _resolve_patron(name):
+        """Wrap a bpy object by name as a moldboxer_lite Object. Raises if missing."""
+        import bpy
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            raise RuntimeError(f"Object '{name}' not found in scene")
+        from moldboxer_lite import Object as MBObject
+        return MBObject(obj)
+
+    @staticmethod
+    def _summarize_object(mb_obj):
+        """JSON-safe summary of a moldboxer_lite Object."""
+        try:
+            return {
+                "name": mb_obj.object.name,
+                "dimensions_mm": [
+                    round(float(mb_obj.width), 3),
+                    round(float(mb_obj.depth), 3),
+                    round(float(mb_obj.height), 3),
+                ],
+                "bbox_min_mm": [
+                    round(float(mb_obj.min_x), 3),
+                    round(float(mb_obj.min_y), 3),
+                    round(float(mb_obj.min_z), 3),
+                ],
+                "bbox_max_mm": [
+                    round(float(mb_obj.max_x), 3),
+                    round(float(mb_obj.max_y), 3),
+                    round(float(mb_obj.max_z), 3),
+                ],
+            }
+        except Exception as e:
+            return {"name": getattr(mb_obj, "object", None) and mb_obj.object.name, "error": str(e)}
+
+    def mb_setup_mm(self):
+        """Configure the active Blender scene to use millimeter units.
+
+        Always call this once at the start of a Moldboxer pipeline so distances
+        in subsequent tools are interpreted as mm.
+        """
+        try:
+            self._bootstrap_moldboxer()
+            from moldboxer_lite import configure_metric_millimeter_units
+            configure_metric_millimeter_units()
+            return {"ok": True, "unit": "MILLIMETERS"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def mb_preprocess_patron(self, object_name=None, master_quality="HIGH",
+                             center=True, isolate=False):
+        """Preprocess the imported master mesh as `patron`.
+
+        Renames the object to 'patron', applies transforms, centers to origin
+        (Z=0 at the bottom), and voxel-heals if non-manifold.
+
+        Args:
+            object_name: name of the object to use. If None, uses the active object.
+            master_quality: FAST | MID | HIGH | ULTRA (voxel detail for healing).
+            center: snap to origin (XY=0, Z=0 at the bottom).
+            isolate: join disconnected sub-meshes (filtered by volume).
+        """
+        try:
+            self._bootstrap_moldboxer()
+            from moldboxer_lite import preprocess_patron, Object as MBObject
+            import bpy
+
+            target = None
+            if object_name is not None:
+                target = self._resolve_patron(object_name)
+            else:
+                # Allow auto-pick of active object.
+                active = bpy.context.view_layer.objects.active
+                if active is not None:
+                    target = MBObject(active)
+
+            patron = preprocess_patron(
+                target=target,
+                master_quality=master_quality,
+                center=center,
+                isolate=isolate,
+            )
+            return {
+                "ok": True,
+                "patron": self._summarize_object(patron),
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def mb_auto_box(self, patron_name="patron", box_gap=4.5, box_quality="MID",
+                    channel_width=5.0, channel_depth=6.0,
+                    adjust_to_contour=True, larger_back=True,
+                    funneler=True, safe_mode=False):
+        """Generate an auto-box (2-half silicone mold) around `patron_name`.
+
+        Replicates `silicone.auto_box` from Moldboxer 1.4.9 client-side
+        (no server roundtrip). Adds wrapper + side channels + funneler/deposit
+        + carves the inner cavity by subtracting the patron.
+
+        Returns the 'box' object metadata. Call mb_confirm_mold next to split,
+        add base and interlock keys.
+        """
+        try:
+            self._bootstrap_moldboxer()
+            from moldboxer_lite import auto_box
+            patron = self._resolve_patron(patron_name)
+            box = auto_box(
+                patron,
+                box_gap=float(box_gap),
+                box_quality=str(box_quality),
+                channel_width=float(channel_width),
+                channel_depth=float(channel_depth),
+                adjust_to_contour=bool(adjust_to_contour),
+                larger_back=bool(larger_back),
+                funneler=bool(funneler),
+                safe_mode=bool(safe_mode),
+            )
+            return {"ok": True, "box": self._summarize_object(box)}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def mb_auto_flat(self, patron_name="patron", box_gap=4.5, box_quality="MID",
+                     grip_height=10.0, open_top_margin=2.0,
+                     add_volume_text=False):
+        """Generate an auto-flat (1-piece, open-top, with side grip) mold.
+
+        Replicates `silicone.flat_auto_box` client-side. Suitable for short or
+        flat masters that are demolded by pulling the silicone out from the top.
+        """
+        try:
+            self._bootstrap_moldboxer()
+            from moldboxer_lite import auto_flat
+            patron = self._resolve_patron(patron_name)
+            box = auto_flat(
+                patron,
+                box_gap=float(box_gap),
+                box_quality=str(box_quality),
+                grip_height=float(grip_height),
+                open_top_margin=float(open_top_margin),
+                add_volume_text=bool(add_volume_text),
+            )
+            return {"ok": True, "box": self._summarize_object(box)}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def mb_confirm_mold(self, patron_name="patron", box_name="box",
+                        join_patron=True, master_base_pin=True,
+                        n_splits=2, add_keys=True, key_count=4,
+                        key_size=4.0, key_tolerance=0.2, voxel_size=0.8,
+                        space_objects=True):
+        """Finalize the mold: compute silicone volume, add base + volume text,
+        split on Y, add interlock keys.
+
+        Args:
+            patron_name, box_name: object names produced by previous steps.
+            join_patron: "Fixed Master" mode — master and base merge.
+            master_base_pin: add centering pin under the master (only if
+                join_patron is False).
+            n_splits: 0 (no split, keep single box) or 2 (split on Y axis).
+            add_keys: add interlock keys on the split faces.
+            key_count, key_size, key_tolerance: key shape params (mm).
+            voxel_size: final cleanup voxel (mm).
+            space_objects: spread {patron, mold, silicone_preview} along X for
+                visualization.
+
+        Returns a dict with the names+bboxes of all output objects and the
+        computed silicone volume in mm³.
+        """
+        try:
+            self._bootstrap_moldboxer()
+            from moldboxer_lite import confirm_mold
+            patron = self._resolve_patron(patron_name)
+            box = self._resolve_patron(box_name)
+            parts = confirm_mold(
+                patron,
+                box,
+                join_patron=bool(join_patron),
+                master_base_pin=bool(master_base_pin),
+                n_splits=int(n_splits),
+                add_keys=bool(add_keys),
+                key_count=int(key_count),
+                key_size=float(key_size),
+                key_tolerance=float(key_tolerance),
+                voxel_size=float(voxel_size),
+                space_objects=bool(space_objects),
+            )
+
+            def _name(obj):
+                if obj is None:
+                    return None
+                # bpy object or MBObject wrapper
+                if hasattr(obj, "object"):
+                    return obj.object.name
+                return obj.name
+
+            return {
+                "ok": True,
+                "volume_mm3": round(float(parts.get("volume_mm3", 0.0)), 1),
+                "objects": {
+                    "box": _name(parts.get("box")),
+                    "box_l": _name(parts.get("box_l")),
+                    "box_r": _name(parts.get("box_r")),
+                    "silicone_mold": _name(parts.get("silicone_mold")),
+                    "patron": _name(parts.get("patron")),
+                },
+            }
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
+
+    def mb_export_parts(self, dir_path, apply_modifiers=True):
+        """Export every mesh in the scene as STL into `dir_path`.
+
+        File naming follows the Moldboxer convention:
+          - objects containing 'patron' or 'silicone' → `<name>_<volume_ml>ml.stl`
+          - other objects → `<name>.stl`
+
+        Returns the list of files written.
+        """
+        try:
+            self._bootstrap_moldboxer()
+            from moldboxer_lite import export_all_parts
+            written = export_all_parts(dir_path, apply_modifiers=bool(apply_modifiers))
+            return {"ok": True, "count": len(written), "files": written}
+        except Exception as e:
+            return {"error": str(e), "traceback": traceback.format_exc()}
 
     def _wall_thickness_stats(self, bm, watertight, max_samples=5000):
         """Raycast-based wall thickness distribution.
