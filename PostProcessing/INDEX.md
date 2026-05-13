@@ -1,99 +1,141 @@
 # PostProcessing — Knowledge Base
 
-KB sul post-processing di stampe estetiche in **PLA** su **Bambu A1**. Focus:
-pittura a bomboletta/pittura fredda, effetti ceramici/pietra, smoothing layer
-lines, sigillatura e presentazione del prodotto finito.
+KB sul post-processing di stampe estetiche in **PLA basic** su **Bambu A1** per
+**piccolo brand commerciale** con vincolo budget. Focus: massimizzare margine
+unitario aumentando qualità percepita con DIY + sourcing intelligente (IT/EU/Cina bulk).
 
-**Constraint trasversale**: PLA Tg ~60 °C → tutto cold-cure. Niente forno, kiln,
-heat gun. Per ogni tecnica citata si è verificata la compatibilità con questo
-limite.
+**Vincoli operativi confermati**:
+- PLA basic (no Silk/Marble/Stoneworks premium, no SLA)
+- Tg ~60°C → tutto cold-cure, niente forno
+- Garage ventilato disponibile → bombolette OK con PPE
+- Warehouse disponibile → bulk ordering Cina realistico
+- Scale prodotto miste 3–40 cm
+- Uso misto: vendita commerciale + personale
+- **Metrica primaria**: €/pezzo + tempo/pezzo, **NON** perfezione assoluta
 
-## Struttura
+---
+
+## 🎯 Raccomandazione operativa (sintesi round 1+2)
+
+### Workflow base "Porcellana economy" — **€0.42-0.55/pezzo materiali, 50 min**
+Da `05_round2/E_diy_budget/07_workflow_recommended.md`. Copre **85-90% della
+percezione qualità del cliente non-modellista** rispetto al workflow premium €7/pezzo.
+
+```
+Sgrasso IPA → PVA+talco filler DIY → sand 320/600 →
+Primer MaxMeyer/Maximum BricoIO → sand 800 wet → acrilico Maxi Color →
+(opz wash tè + drybrush Giotto) → Pledge clear coat → (opz polish dentifricio)
+```
+
+### Setup tool una tantum — **€92 totali** (€198 se solo IT, €100 via Cina)
+Da `05_round2/E_diy_budget/04_setup_tools_under_100eur.md` e
+`05_round2/F_china_bulk/10_master_china_shopping_list.md`:
+- Airbrush 0.3mm + compressore tank 3L Aliexpress: €60-80
+- Light tent PULUZ 60cm + LED ring + tripod: €40-50
+- Maschera 3M 6200 clone + filtri A1: €15
+- Carta vetrata + pennelli + spatole + IPA + guanti: €25 Brico
+
+### Quando salire di tier (two-tier strategy R2-A)
+- **Default**: Pledge / Glassex (€0.03/pezzo) o Mr. Super Clear UV Cut (€0.50/pezzo)
+- **Solo pezzi >€40 commerciali con touchpoint**: SprayMax 2K (€22-28/bombola, PPE serio)
+  Sotto soglia il ROI del 2K non ripaga PPE/complessità/sensibilizzazione cronica.
+
+### Shortcut radicali per geometrie specifiche (R2-B)
+| Geometria | Shortcut | €/pezzo | Tempo | Resa |
+|-----------|----------|---------|-------|------|
+| Vasi/lampshade decor | PLA Silk vase mode + Pledge | €1.60 | 30 min | 7/10 |
+| Ciotole biscuit | PLA Matte nudo (no post) | €3.75 | 0 min | 7/10 |
+| Ciotole biscuit autentico | Kaolin slurry DIY (PVA+kaolin) | €0.30 | 60 min | 10/10 |
+| Stone/granito | ProtoPasta Sandstone nudo* | €10 | 0 min | 8/10 |
+
+*Premium filament — valutare solo se volume giustifica €30+/kg.
+
+### Heat-set inserts protocol (R2-D) — 3 step
+1. **CAD**: foro = OD_inserto (M3 Ruthex → 4.0mm), depth × 1.2, chamfer 45°×0.5mm, parete ≥ 2.5× thread.
+2. **Heat**: 210°C (mai >230°C), 1-2s preheat, 3-5s pressione perpendicolare, no rotazione.
+3. **Jig**: cilindro guida PETG perpendicolare → drop fail rate 3-5×.
+Inserts Cina M3 500 pcs €20 vs Ruthex €60-90 (R2-F).
+
+### Fase con ROI marginale più alto: **foto prodotto + listing** (R2-D)
+- Da 45min/pezzo → 8min/pezzo con setup permanente
+- Light tent + tripod + ColorChecker + Lightroom preset + template Etsy
+- Investimento 4h + €150 → ripaga in **10 pezzi**
+- Conversion +35-60% Etsy (più impattante di 2h di sanding extra)
+
+### 3 trick "near-free" R2-E
+1. **Wash tè nero + goccia detergente piatti** (€0.001/pezzo) = Citadel Agrax Earthshade (€8/24ml)
+2. **Pledge/Glassex clear coat a pennello** (€0.03/pezzo) = Mr.Hobby Premium Gloss (€0.50/pezzo) @ 85% resa
+3. **Polish dentifricio + carta 2000 wet** (€0.01/pezzo) = Tamiya Polishing Compound
+
+### 3 trick batch-processing R2-D (saving >30%)
+1. **Cura parallela su rack verticale**: tutti i pezzi curano insieme, tempi morti O(N)→O(1)
+2. **Stazioni LEAN 5S**: zona sanding, spray, assembly, foto — niente context switch
+3. **Template + preset + jig**: setup una tantum 6-10h, ripaga in 20 pezzi, taglia 60-80% task ripetitivi
+
+---
+
+## 🛒 Sourcing — strategia di crescita ordini Cina (R2-F)
+
+| Fase | Ordine | Piattaforma | Budget | Obiettivo |
+|------|--------|-------------|--------|-----------|
+| M1 | Test | Aliexpress IOSS | €100-150 | familiarizzare, validare qualità su prodotti chiave |
+| M2 | Espansione | Aliexpress | €350 | airbrush+compressore+filamento |
+| M5-6 | Custom | Alibaba Trade Assurance | €1600 | packaging custom 500+, sticker, mailer kraft |
+| M8+ | Agente | Yansourcing/EasyChina (fee 5-8%) | spesa annua >€3000 | scaling |
+
+**Top 5 ROI Cina (>50% saving, low risk dogana)**:
+1. Heat-set M3 500 pcs (€20 vs €60-90, -65%)
+2. Pigmenti mica/pearl 24 colori (€8 vs €50-80, -80%)
+3. Compressore AS186 + Fengda BD-130 (€90 vs €280-400, -65%)
+4. Sunlu PLA+ 10kg bundle (€100 vs €180-220, -45%)
+5. Light tent PULUZ + accessori foto (€100 vs €280-350, -65%)
+
+**NON comprare Cina** (qualità o problemi normativi):
+- Cloni Vallejo/Citadel/Tamiya/Mr.Hobby/XTC-3D (qualità inferiore)
+- Bombolette spray commerciali (IATA mare obbligatorio, CLP/SDS farlocchi)
+- PPE filtri respiratore "certificate" (certificazione EU sospetta)
+
+**Fallback Italia** se non hai tempo Cina (R2-C): starter kit €198 (Saratoga + Tamiya + Mr.Hobby UV Cut + carta + 3M + Vallejo).
+
+---
+
+## 📁 Struttura KB
 
 ```
 PostProcessing/
-  INDEX.md                       # questo file
-  01_layer_lines_smoothing/      # eliminazione layer lines, sanding, filler, smoothing chimico, epoxy
-  02_painting_and_primers/       # primer, topcoat, tecniche spray, effetti, errori
-  03_ceramic_stone_finish/       # 5 interpretazioni di "ceramica" + ricette multi-layer
-  04_sealing_presentation/       # clear coat, UV, basi/display, foto, packaging
+  INDEX.md                                  # questo file
+  01_layer_lines_smoothing/                 # ROUND 1
+  02_painting_and_primers/                  # ROUND 1
+  03_ceramic_stone_finish/                  # ROUND 1 — 5 effetti + 10 ricette multi-layer
+  04_sealing_presentation/                  # ROUND 1
+  05_round2/
+    A_2k_clearcoat/                         # tier-above, two-tier strategy
+    B_shortcuts_filaments/                  # filamenti speciali + trick consumer
+    C_italia_sourcing/                      # mappa shop IT/EU
+    D_pipeline_industrial/                  # heat-set + ironing + pricing + batch
+    E_diy_budget/                           # ⭐ workflow core <€1/pezzo
+    F_china_bulk/                           # Alibaba/1688/Aliexpress
 ```
 
-Ogni sottocartella contiene file numerati `01_*.md` … e:
-- `_sources.md` — URL consultati, categorizzati
-- `_next_questions.md` — spunti emersi per round successivi di ricerca
+Ogni cartella: file numerati + `_sources.md` (URL) + `_next_questions.md` (spunti).
 
-## Round 1 — sintesi finding (maggio 2026)
+---
 
-### 01 — Layer lines smoothing
-- **Default trasversale**: Rust-Oleum Filler Primer + wet sanding 220→400→600→800
-- **Smoothing chimico PLA**: PLA NON reagisce all'acetone. Solo etile acetato è
-  hobby-feasible (con PPE), DCM/THF troppo tossici. Per la maggior parte dei
-  casi conviene meccanico+filler.
-- **Epoxy**: Smooth-On XTC-3D è il riferimento per curve organiche grandi
-  (cosplay, helmet, busti). Possibile perdita di adesione vernice acrilica
-  → scuffing 400 obbligatorio dopo cure.
-- **Trick**: CA glue + baking soda per gap profondi, sandable subito.
+## 🔬 Round 3 — gap di conoscenza prioritari (test concreti)
 
-### 02 — Painting & primers
-- **Top 3 primer**: Tamiya Surface Primer (gold standard hobby), Rust-Oleum
-  Filler Primer (best Q/P per high-build), Citadel Wraithbone/Grey Seer
-  (primer + zenithal in un colpo).
-- **Workflow base**: sgrassare con IPA → filler primer (se necessario) →
-  carteggio 600 → primer fine → 2-3 mani sottili a 25cm, 18-25 °C, 40-60% RH
-  → topcoat → clear coat.
-- **Da evitare su PLA**: acetone, MEK, lacche celluloiche, automotive 2K
-  isocianati senza precauzioni (solvent crazing).
+Pattern cross-agent emersi come gap rispetto alla letteratura:
 
-### 03 — Ceramic / stone finish (focus principale)
-5 interpretazioni con ricetta dedicata in `06_multilayer_recipes.md`:
-1. **Porcellana liscia bianca lucida** — Rust-Oleum Filler Primer x3 + wet
-   sand 400/600/800 + Vallejo Surface Primer White + Tamiya TS-26 + Mr. Hobby
-   Premium Gloss + polish Tamiya Fine. ~€7/pezzo, 4 giorni, ★★★.
-2. **Matte / biscuit** — Gesso + Liquitex Light Modeling Paste tamponata +
-   wash terra ombra + Vallejo Matte Varnish.
-3. **Stone / granito** — Primer nero + Montana GRANIT (water-based, PLA-safe)
-   o MaxMeyer effetto pietra + matte sealer.
-4. **Smaltato lucido** — XTC-3D base + Mr. Hobby Premium Gloss x3 wet coats,
-   **oppure** trick Pledge Floor Care su porcellana satinata (€0.20).
-5. **Crackle/raku** — Vallejo Black satin + Vallejo Crackle Medium 70.598 +
-   Vallejo White matte UNA mano densa + wash Indian ink + solo acrylic gloss
-   varnish (lacquer scioglie le crepe).
+1. **Cross-hatch ASTM D3359 misurato** su PLA Bambu Basic per 5 primer (Maximum BricoIO,
+   MaxMeyer, Saratoga, Vallejo, Tamiya). Sostituire stime forum con dati reali.
+2. **Yellowing 12 mesi** Δ-E smartphone+ColorChecker di 5 clear coat (Pledge, MaxMeyer,
+   Plasti-kote, Vallejo Polyurethane, Aliexpress generic).
+3. **Preval sprayer + Pledge decantato** → DIY spray gloss €0.05/pezzo (potenziale replacement Mr.Hobby Premium).
+4. **Time-tracking lotto pilota 10 pezzi** reale con stopwatch per validare timeline R2-D.
+5. **A/B pricing Etsy reale** (€80 / €110 / €140) → conversion rate effettivo.
+6. **Test journal primo ordine Aliexpress** (KPI documentati: tempo, dogana, qualità).
+7. **Marmorino veneziano su PLA primerizzato** (claim teorica forte, mai testato).
+8. **Vase mode multi-perimeter Orca Slicer** su Bambu A1 (vasi >25cm robusti).
 
-### 04 — Sealing & presentation
-- **Sigillatura 2-strati**: Mr. Hobby Mr. Super Clear UV Cut (gloss prima,
-  poi satin/matte). Aggiunge barriera UV che PLA non ha nativamente.
-- **PLA outdoor**: degrada in mesi con UV. Per duty-cycle prolungato valutare
-  SprayMax 2K aerosol (isocianato, PPE serio).
-- **Base/plinth dedicata** (legno noce oliato o acrilico nero) + pin ottone o
-  magnete annegato + nameplate inciso laser → moltiplicatore di percepito.
-- **Foto prodotto minima**: light tent 60cm o finestra+bounce, sfondo PVC,
-  smartphone Pro RAW + Lightroom Mobile + ColorChecker.
-- **Standard 6-shot listing**: hero, ortho, detail, scale, lifestyle, packaging.
-
-## Pattern cross-area emersi (candidati round 2)
-
-1. **SprayMax 2K aerosol** — citato in 3 agenti come "tier above" per durabilità.
-   Sicurezza casalinga, applicazione su PLA, longevità → deep dive dedicato.
-2. **Filamenti ceramic-filled** (ProtoPasta Stoneworks, Fillamentum Vertigo
-   Ceramic) e **Silk PLA + Pledge** → potenziale shortcut radicale del workflow.
-3. **Heat-set inserts su PLA** — protocollo solido non pubblicato. Temperatura,
-   geometria foro, depth ratio. Critico per montaggio prodotti commerciali.
-4. **Reperibilità Italia** — mappare equivalenti IT dei prodotti USA/UK
-   (Crelando Lidl, MaxMeyer, Saratoga, Ivea per stone; shop fisici Tamiya/Mr.Hobby).
-5. **Ironing Bambu Studio** come pre-finishing per ridurre sanding sul top.
-6. **End-to-end time/cost study** — meta-questione: tracciare un singolo prodotto
-   CAD→packaging per identificare la fase ROI marginale più alto.
-7. **Test misurati** (Ra, delta-E, pull-off ASTM D3359) — gap scientifico per
-   la maggior parte dei prodotti hobby. Possibili test casalinghi.
-
-## Domande dirette all'utente per indirizzare round 2
-
-1. Dimensioni tipiche dei pezzi (statuetta 5cm vs vaso 30cm cambia tutto)?
-2. Quale dei 5 effetti ceramici è priorità #1 ora?
-3. Spazio di lavoro: bombolette spray fattibili (terrazzo/garage) o solo airbrush indoor?
-4. Budget tool (filler primer + airbrush ~€90 OK?).
-5. Tempo per pezzo (24h calendario o 1 settimana OK)?
-6. I pezzi vanno manipolati o solo display?
-7. Outdoor/finestra (criticità UV) o interno protetto?
-8. Stai vendendo (commerciale) o produzione personale?
+I round 1+2 hanno coperto la dimensione **bibliografica e sourcing**. Il round 3
+naturale è **sperimentale**: test casalinghi misurati con protocolli definiti
+(`05_round2/A_2k_clearcoat/04_measurable_test_protocol.md` è il template).
