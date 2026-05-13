@@ -53,18 +53,24 @@ class Wrapper(Object):
 
         if build_from_sphere:
             # Parti da una UV sphere centrata sul target, scalata per coprire tutta la bbox.
+            # Scala = (max dimensione target × 0.75), così il diametro = 1.5 × max_dim
+            # (margine sufficiente perché il successivo shrinkwrap arrivi al target).
             sphere_obj = create_uv_sphere_primitive(1.0)
             super().__init__(sphere_obj, name="box" + name_adder)
-            # Scala uniforme così che il diametro = max dimensione del target × 1.5.
             target_max = max(target.width, target.depth, target.height)
             self.scale_uniform(target_max * 0.75)
-            # Trasla al centro del target.
             self.translate_whole(target.center_coords)
             self.apply_all_transforms()
         else:
-            # Duplica il target, espandi outward con scale_normals(2).
+            # Duplica il target e espandi outward con scale_normals.
+            # Il valore di inflation deve essere LEGGERMENTE MAGGIORE del `distance`
+            # target (= box_gap) così che il successivo shrinkwrap abbia margine per
+            # "spingere indietro" la geometria fino alla distanza esatta.
+            # FIX 2026-05-13: prima era costante 2.0 mm (=ignorava box_gap); ora scala
+            # con distance × 1.2 (per box_gap=4.5 → inflation 5.4 mm, sufficiente).
             wrapper_obj = target.duplicate(name_adder="_wrap_tmp")
-            wrapper_obj.scale_normals(2.0)
+            inflation = max(distance * 1.2, 2.0)  # min 2mm per master molto piccoli
+            wrapper_obj.scale_normals(inflation)
             super().__init__(wrapper_obj.object, name="box" + name_adder)
 
         self.build_from_sphere = build_from_sphere

@@ -15,9 +15,24 @@ import bpy
 from .object_wrapper import Object
 
 
-def export_all_parts(dir_path: str, apply_modifiers: bool = True) -> list:
-    """Esporta ogni oggetto della scena come STL nel dir indicato.
-    Restituisce la lista dei file scritti."""
+def export_all_parts(dir_path: str, apply_modifiers: bool = True,
+                     skip_prefixes: tuple = ("_",)) -> list:
+    """Esporta ogni oggetto MESH della scena come STL nel dir indicato.
+
+    Args:
+        dir_path: directory di output (creata se non esiste).
+        apply_modifiers: bake dei modifier durante l'export.
+        skip_prefixes: tupla di prefissi nei nomi degli oggetti da NON esportare.
+            Default `("_",)` filtra le mesh ausiliarie con nome `_xxx` (tipiche
+            di residui temporanei post-boolean). Passare `()` per esportare tutto.
+
+    File naming convention (compatibile con il prodotto Moldboxer reale):
+      - oggetti con "patron" o "silicone" nel nome → `<name>_<volume_ml>ml.stl`
+      - altri oggetti → `<name>.stl`
+
+    Returns:
+        Lista dei path file scritti.
+    """
     out_dir = Path(bpy.path.abspath(dir_path))
     out_dir.mkdir(parents=True, exist_ok=True)
     if out_dir.suffix.lower() == ".blend":
@@ -28,6 +43,9 @@ def export_all_parts(dir_path: str, apply_modifiers: bool = True) -> list:
         if obj.type != "MESH":
             continue
         name = obj.name
+        # Skip temporary / auxiliary meshes by prefix.
+        if any(name.startswith(p) for p in skip_prefixes):
+            continue
         wrapped = Object(obj)
         if "patron" in name or "silicone" in name:
             try:

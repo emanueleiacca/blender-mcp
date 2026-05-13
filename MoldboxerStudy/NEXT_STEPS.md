@@ -123,3 +123,35 @@ Quando completi un task:
 
 - **2026-05-13** — Setup iniziale: documentazione completa, libreria foundations + auto_flat + auto_box + confirm scritti e validati a sintassi. P0 da fare: live test + integrazione MCP.
 - **2026-05-13 (later)** — P0.2 ✅: integrazione MCP completata. 6 tool `mb_*` in `server.py`, 6 handler in `addon.py` (bump v1.6.0), nuovo prompt `mold_strategy()`. `sys.path` bootstrap automatico verso `MoldboxerStudy/moldboxer_lite/`. Smoke test verde. P0.1 (live test in Blender) ancora pending — richiede avvio addon Blender.
+- **2026-05-13 (P0.1 live test)** — live test su asso_di_bastoni FATTO. 3 bug fix applicati: FONT→MESH per volume_text, create_cube_primitive size mismatch, clean_bot(2) semantica invertita. Pipeline auto_box+confirm completa in ~25s, produce 4 oggetti con statistiche coerenti.
+- **2026-05-13 (KNOWLEDGE REVIEW)** — review profonda con 3 agenti (visiva screenshot + trascrizione tutorial + codice). Scoperti **3 bug P0 NUOVI** che rendono il mold non funzionale per colata reale (anche se passa i test geometrici): (1) **funneler unito invece di sottratto** = no foro passante, (2) **clamp_pins dead code** = no allineamento tra metà, (3) **patron resta duplicato** dopo join. Più 6 bug P1 (interlock cubi non piramidi, adjust_to_contour ignorato, doppio voxel, ecc.). Vedi `KNOWLEDGE_REVIEW_2026-05-13.md` per dettaglio completo.
+- **2026-05-13 (FIX SISTEMICO)** — applicati 2 fix P0 + 6 fix P1 + 2 cleanup. Smoke test stdlib verde, py_compile verde su tutti i 16 moduli. Codice pronto per live test in Blender. Fix specifici:
+  * P0.1 `auto_box.py:76`: funneler ora bucante (`box -= dep`)
+  * P0.2 `split_and_base.py:139-148`: `patron.remove()` quando join_patron=True
+  * P1.1 `channels.py`: rimosso dead code `build_clamp_pins`
+  * P1.2 `split_and_base.py`: interlock keys piramidali tronche (top_scale=0.7) via `_build_pin(axis=1)`
+  * P1.3 `channels.py`: `adjust_to_contour` ora con raycast effettivo (`_raycast_contour_y`)
+  * P1.4 `auto_box.py:91-98`: rimosso voxel-remesh finale ridondante (commentato)
+  * P1.5 `wrapper.py`: `scale_normals` ora parametrizzato su `distance × 1.2`
+  * P1.6 `split_and_base.py`: split tolerance 0.001 → 0.05 mm
+  * Cleanup: `export.py` skippa prefissi `_`; magic numbers in `channels.py` documentati.
+
+## Prossimi step concreti (post-review)
+
+### ✅ FATTI 2026-05-13 (sera tarda)
+- ~~Fix funneler~~ ✅ `auto_box.py:76` `box -= dep`
+- ~~Patron remove dopo join~~ ✅ `split_and_base.py:144`
+- ~~Interlock piramidali~~ ✅ `_build_pin` con axis-aware + `add_interlock_keys` rewrite
+- ~~`adjust_to_contour` raycast~~ ✅ `_raycast_contour_y` in channels.py
+- ~~Voxel finale ridondante~~ ✅ disabilitato in `auto_box.py`
+- ~~Scale_normals parametrizzato~~ ✅ `wrapper.py: distance × 1.2`
+- ~~Split tolerance~~ ✅ 0.05 mm
+- ~~Dead code build_clamp_pins~~ ✅ rimosso
+- ~~Export filter prefisso `_`~~ ✅
+- ~~Magic numbers documentati~~ ✅
+
+### Next live test (richiede MCP attivo + Blender aperto)
+- Re-run pipeline sull'asso_di_bastoni
+- **Test funzionale critico funneler**: cast ray verticale @ X=0,Y=0,Z=200 verso -Z su `box`. Deve passare ATTRAVERSO la parete superiore del box. Vedi `KNOWLEDGE_REVIEW_2026-05-13.md` §9 per pseudo-test.
+- Scene check: dopo confirm con join_patron=True devono esserci SOLO 3 oggetti `{box_l, box_r, silicone_mold}`
+- Visual check via screenshot + X-ray: foro funneler visibile, piramidi tronche sulle facce di split.

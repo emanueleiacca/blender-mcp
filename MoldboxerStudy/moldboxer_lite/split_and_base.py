@@ -24,11 +24,15 @@ from .primitives import create_cube_primitive
 # Split su asse Y (default Moldboxer)
 # ---------------------------------------------------------------------------
 
-def split_box_on_y(box: Object, gap: float = 0.001) -> Tuple[Object, Object]:
+def split_box_on_y(box: Object, gap: float = 0.05) -> Tuple[Object, Object]:
     """Taglia il box sul piano Y=0 in due metà. Restituisce (box_l, box_r) cioè
     (metà negativa di Y, metà positiva di Y).
 
-    `gap`: micro-tolleranza in mm per evitare facce coincidenti.
+    `gap`: tolleranza in mm sul piano di split. Valore aumentato da 0.001 → 0.05
+    (FIX 2026-05-13) perché con 0.001 il boolean MANIFOLD può lasciare facce
+    coincidenti non sigillate su master non-manifold (es. teddy bear con micro
+    self-intersections). Un gap di 0.05mm è invisibile a stampa FDM (1/2 layer)
+    ma garantisce sigillatura geometrica delle 2 metà.
     """
     neg, pos = box.split(plane_normal=Vector((0, 1, 0)), plane_point=Vector((0, 0, 0)), tolerance=gap)
     neg.name = "box_l"
@@ -59,18 +63,36 @@ def build_master_base_pin(base: Object, patron: Object) -> Tuple[Object, Object]
     return male, female
 
 
-def _build_pin(base_size: float, top_scale: float, location) -> Object:
-    """Crea un cubo size×size con la top-face scalata di top_scale (tronco piramide)."""
+def _build_pin(base_size: float, top_scale: float, location, axis: int = 2) -> Object:
+    """Crea un cubo `base_size`×`base_size`×`base_size` la cui face estrema su `axis`
+    è scalata di `top_scale` sulle altre due dimensioni — risultato: una piramide
+    tronca quadrata.
+
+    Args:
+        base_size: lato del cubo di partenza (= dimensione della base larga).
+        top_scale: fattore di scaling della face estrema (es. 0.7 per base 4mm -> top 2.8mm).
+        location: centro del cubo in world space.
+        axis: 0 (X), 1 (Y), 2 (Z, default). La face a +axis viene scalata.
+              axis=2 (default): top-face scalata su X,Y → piramide verticale.
+              axis=1 (Y):       +Y-face scalata su X,Z → piramide "sdraiata" su Y.
+              axis=0 (X):       +X-face scalata su Y,Z → piramide "sdraiata" su X.
+
+    L'asse `axis` corrisponde alla direzione di "rastremazione" — molto utile per
+    interlock keys: la base larga si attacca a una metà del mold, la punta più
+    piccola sporge nell'altra (con clearance per guida d'ingresso).
+    """
     cube = create_cube_primitive(size=base_size, location=location)
     obj = Object(cube)
-    # Scala i 4 vertici "top" verso il centro lungo X e Y.
     from .object_wrapper import BMeshEdit
-    z_max = max(v.co.z for v in cube.data.vertices)
+    # Estrai la coordinata estrema su `axis` (== +base_size/2 in local space).
+    extreme_co = max(v.co[axis] for v in cube.data.vertices)
+    # Le altre due assi vengono scalate.
+    other_axes = [i for i in range(3) if i != axis]
     with BMeshEdit(cube) as bm:
         for v in bm.verts:
-            if abs(v.co.z - z_max) < 1e-4:
-                v.co.x *= top_scale
-                v.co.y *= top_scale
+            if abs(v.co[axis] - extreme_co) < 1e-4:
+                for ax in other_axes:
+                    v.co[ax] *= top_scale
     return obj
 
 
@@ -135,7 +157,13 @@ def add_basing_to_system(
     # --- 2. Pin / join patron ---
     if patron is not None:
         if join_patron:
-            base += patron  # consuma il patron, fonde col base
+            # "Fixed Master" mode (tutorial @ 06:46): master and base merge into
+            # a single piece. The boolean union bakes the patron geometry into
+            # the base, but the standalone `patron` bpy_object remains in scene
+            # by default — without an explicit remove it would appear duplicated
+            # (live-tested 2026-05-13).
+            base += patron
+            patron.remove()
         elif master_base_pin:
             pin_patron_to_base(base, patron, master_base_pin=True)
 
@@ -194,18 +222,33 @@ def add_interlock_keys(
     key_count: int = 4,
     key_size: float = 4.0,
     key_tolerance: float = 0.2,
+    top_scale: float = 0.7,
 ) -> Tuple[Object, Object]:
-    """Aggiunge `key_count` piramidi tronche sulla superficie di split.
-    Maschi su box_l (+chiave), femmine su box_r (−chiave + tolerance).
+    """Aggiunge `key_count` **piramidi tronche** sulla superficie di split (Y=0).
+
+    Questo è il "Clamp Pin / key system" del tutorial Moldboxer (vedi @02:54):
+    maschi sporgenti da box_l (Y<0), cavità corrispondenti su box_r (Y>0). La forma
+    tronco-piramidale dà una guida d'ingresso quando si assemblano le due metà,
+    mentre la base larga dà tenuta meccanica.
 
     Strategia:
-      - Identifica il piano di split (Y=0).
-      - Distribuisce N punti lungo l'asse X del box, a z = z_center.
-      - Per ogni punto, crea un cubo di lato `key_size` centrato sulla split plane.
-      - Box_l += key → maschio
-      - Box_r -= key (scalato di key_tolerance) → femmina con clearance
+      - Distribuisce N posizioni lungo l'asse X del box, a Z = centro verticale.
+      - Per ogni posizione:
+        * MASCHIO: piramide tronca con base larga sulla split surface (Y=0) e
+          punta più piccola che sporge verso +Y di `key_size/2`. Unione su box_l.
+        * FEMMINA: piramide tronca scalata di (key_size + 2*tolerance) per dare
+          clearance d'inserimento. Sottratta da box_r.
+
+    NB precedente (2026-05-13): le keys erano cubi semplici (no guida d'ingresso),
+    causando assemblaggio impreciso. Ora usano `_build_pin(axis=1)` per piramidi
+    "sdraiate" lungo Y (rastremazione verso +Y = punta).
+
+    FIX 2026-05-13: il primo tentativo aveva un bug nel posizionamento — il pin
+    veniva costruito centrato in Y=0 ma con `translate_whole(Vector((0, -key_size/4, 0)))`
+    poi applicato — risultato: il maschio era posizionato a Y=-1, non sporgeva
+    abbastanza. Ora il maschio viene creato direttamente centrato a Y=+key_size/4
+    (mezzo dentro box_r territory), così sporge correttamente.
     """
-    # Bounding box combinata (le due metà condividono la stessa estensione X/Z).
     x_min = min(box_l.min_x, box_r.min_x)
     x_max = max(box_l.max_x, box_r.max_x)
     z_center = (min(box_l.min_z, box_r.min_z) + max(box_l.max_z, box_r.max_z)) / 2
@@ -220,21 +263,30 @@ def add_interlock_keys(
         ]
 
     for px in positions:
-        # Maschio: cubo piccolo da unire a box_l.
-        male = create_cube_primitive(size=key_size, location=(px, 0, z_center))
-        male_obj = Object(male, name=f"key_m_{int(px)}")
-        # Spostiamo il centro lungo Y così che il pin "sporga" da box_l (Y<0 → centro a Y = -key_size/4).
-        male_obj.translate_whole(Vector((0, -key_size / 4, 0)))
-        male_obj.apply_all_transforms()
-        box_l += male_obj
-        # Femmina: stessa forma ma con tolerance.
-        female = create_cube_primitive(
-            size=key_size + 2 * key_tolerance,
-            location=(px, -key_size / 4, z_center),
+        # MASCHIO: piramide tronca centrata su Y = +key_size/4 (sporge in +Y territory).
+        # Base larga a Y = key_size/4 - key_size/2 = -key_size/4 (dentro box_l).
+        # Punta piccola a Y = key_size/4 + key_size/2 = +3*key_size/4 (sporge in box_r area).
+        male_obj = _build_pin(
+            base_size=key_size,
+            top_scale=top_scale,
+            location=(px, key_size / 4, z_center),
+            axis=1,  # taper along +Y
         )
-        female_obj = Object(female, name=f"key_f_{int(px)}")
-        box_r -= female_obj
+        male_obj.object.name = f"key_m_{int(px)}"
+        box_l += male_obj
         male_obj.remove()
+
+        # FEMMINA: piramide tronca scalata di (key_size + 2*tolerance) — stesso
+        # posizionamento e orientamento del maschio. Sottratta da box_r → cavità
+        # con clearance laterale di `key_tolerance` mm.
+        female_obj = _build_pin(
+            base_size=key_size + 2 * key_tolerance,
+            top_scale=top_scale,
+            location=(px, key_size / 4, z_center),
+            axis=1,
+        )
+        female_obj.object.name = f"key_f_{int(px)}"
+        box_r -= female_obj
         female_obj.remove()
 
     return box_l, box_r

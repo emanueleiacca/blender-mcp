@@ -48,3 +48,6 @@ MoldboxerStudy/Moldboxer Guide*.txt
 # Live-test artefacts produced during validation (large STLs + screenshots)
 MoldboxerStudy/live_test_*.png
 MoldboxerStudy/live_test_export/
+MoldboxerStudy/step*.png
+# Tutorial video screenshots (derived from commercial video, local-only)
+MoldboxerStudy/screen video tutorial/

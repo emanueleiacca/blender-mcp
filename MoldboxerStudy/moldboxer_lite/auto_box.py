@@ -70,15 +70,26 @@ def auto_box(
         box += ch
         ch.remove()
 
-    # --- 3. Funneler / deposit ---
+    # --- 3. Funneler / deposit: foro PASSANTE nella parete superiore ---
+    # IMPORTANTE: il funneler è un foro per versare silicone, NON una colonna piena.
+    # Il tutorial (02:43) dice esplicitamente "an opening where the silicone is poured".
+    # FIX 2026-05-13: era erroneamente "box += dep" (univa il cilindro come colonna piena
+    # sopra al box). Ora è "box -= dep" (sottrazione = buco). Il cilindro generato da
+    # build_funneler è lungo box.height + 10 mm, quindi attraversa completamente la
+    # parete superiore e arriva fino alla cavità interna del patron — il silicone
+    # versato dall'imboccatura scende fino al top del master e riempie il gap laterale.
     if funneler:
         dep = build_funneler(box)
-        box += dep
+        box -= dep
         dep.remove()
 
-    # --- 4. Voxel di pulizia dopo i boolean ---
-    if voxel > 0:
-        box.apply_modifier(build_voxel_modifier(voxel))
+    # --- 4. Voxel di pulizia dopo i boolean (DISABILITATO) ---
+    # Era un voxel-remesh finale dopo le boolean union dei canali + funneler.
+    # In pratica degrada il dettaglio (Wrapper.shape già fa 3 voxel passes con
+    # decimate(0.3)) e arrotonda gli spigoli del funneler / dei canali.
+    # Riattivabile solo se servono cleanup di residui boolean visibili.
+    # if voxel > 0:
+    #     box.apply_modifier(build_voxel_modifier(voxel))
 
     # --- 5. Sottrai il patron per creare la cavità interna ---
     # Lavoriamo su una copia per non distruggere il patron.
